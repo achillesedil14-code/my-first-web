@@ -1,0 +1,2000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marv's Food Hub - POS & Kiosk System</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brandDark: '#121212',
+                        brandRed: '#b91c1c',
+                        brandYellow: '#f59e0b',
+                        brandCard: '#1e1e1e'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap');
+        body { font-family: 'Poppins', sans-serif; }
+        
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #1a1a1a; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #f59e0b; }
+
+        /* Admin receipt preview is display-only; printing remains enabled. */
+        #printable-receipt,
+        #printable-receipt * {
+            -webkit-user-modify: read-only;
+            user-modify: read-only;
+        }
+        #printable-receipt { user-select: text; }
+
+        @media print {
+            body * { visibility: hidden; }
+            #printable-receipt, #printable-receipt *, #printable-daily-report, #printable-daily-report * { visibility: visible; }
+            #printable-receipt { position: absolute; left: 0; top: 0; width: 100%; }
+            #printable-daily-report { position: absolute; left: 0; top: 0; width: 100%; }
+            .page-break { page-break-after: always; break-after: page; }
+
+            /* When printing a receipt, reveal the otherwise-hidden modal and print only the receipt. */
+            body.printing-receipt * { visibility: hidden !important; }
+            body.printing-receipt #receiptModal,
+            body.printing-receipt #receiptModal * { visibility: visible !important; }
+            body.printing-receipt #receiptModal {
+                display: block !important;
+                position: absolute !important;
+                inset: 0 !important;
+                width: 100% !important;
+                height: auto !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                background: #fff !important;
+                backdrop-filter: none !important;
+                overflow: visible !important;
+            }
+            body.printing-receipt #receiptModal > div {
+                width: 100% !important;
+                max-width: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                border: 0 !important;
+                border-radius: 0 !important;
+                box-shadow: none !important;
+                background: #fff !important;
+            }
+            body.printing-receipt #receiptModal h3,
+            body.printing-receipt #receiptModal button { display: none !important; }
+            body.printing-receipt #printable-receipt {
+                position: static !important;
+                width: 100% !important;
+                max-height: none !important;
+                height: auto !important;
+                overflow: visible !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            body.printing-receipt #printable-receipt > div {
+                break-inside: avoid;
+                page-break-inside: avoid;
+                box-shadow: none !important;
+                border-radius: 0 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    
+        /* Display all typed text in uppercase; keep passwords case-sensitive. */
+        input[type="text"]:not(#adminLoginModal input):not(#developerApprovalPanel input), textarea:not(#adminLoginModal textarea):not(#developerApprovalPanel textarea), select:not(#adminLoginModal select):not(#developerApprovalPanel select) { text-transform: uppercase; }
+</style>
+</head>
+<body class="bg-brandDark text-gray-100 min-h-screen flex flex-col justify-between selection:bg-brandYellow selection:text-black">
+
+
+    <!-- CUSTOMER ACCOUNT REGISTRATION GATE -->
+    <div id="customerRegistrationGate" class="hidden fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="w-full max-w-lg max-h-[92vh] overflow-y-auto bg-brandCard border border-zinc-700 rounded-2xl p-6 sm:p-8 shadow-2xl">
+            <div class="text-center mb-6">
+                <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brandYellow text-black mb-3"><i class="fa-solid fa-user-plus text-2xl"></i></div>
+                <h2 class="text-2xl font-black text-white">Create Your Customer Account</h2>
+                <p class="text-sm text-zinc-400 mt-2">Register before entering the Marv's Food Hub order menu.</p>
+            </div>
+            <div id="customerRegistrationStep1" class="space-y-4">
+                <p class="text-xs uppercase tracking-wider text-brandYellow font-bold">Step 1 of 2 · Personal Information</p>
+                <form id="customerPersonalForm" class="space-y-4" onsubmit="goToCustomerCredentials(event)">
+                    <div><label for="customerFullName" class="block text-xs font-semibold text-zinc-300 mb-1.5">Complete Name</label><input id="customerFullName" type="text" autocomplete="name" required minlength="2" placeholder="Enter your complete name" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brandYellow"></div>
+                    <div><label for="customerEmail" class="block text-xs font-semibold text-zinc-300 mb-1.5">Email Address</label><input id="customerEmail" type="email" autocomplete="email" required placeholder="you@example.com" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brandYellow"></div>
+                    <div><label for="customerPhone" class="block text-xs font-semibold text-zinc-300 mb-1.5">Contact Number</label><input id="customerPhone" type="tel" autocomplete="tel" required minlength="7" maxlength="20" placeholder="Enter contact number" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brandYellow"></div>
+                    <button type="submit" class="w-full bg-brandYellow hover:bg-amber-400 text-black font-extrabold py-3 rounded-xl text-sm">Continue to Username & Password <i class="fa-solid fa-arrow-right ml-1"></i></button>
+                </form>
+            </div>
+            <div id="customerRegistrationStep2" class="hidden space-y-4">
+                <p class="text-xs uppercase tracking-wider text-brandYellow font-bold">Step 2 of 2 · Account Credentials</p>
+                <form id="customerCredentialsForm" class="space-y-4" onsubmit="submitCustomerRegistration(event)">
+                    <div><label for="customerUsername" class="block text-xs font-semibold text-zinc-300 mb-1.5">Choose Username</label><input id="customerUsername" type="text" autocomplete="username" required minlength="3" maxlength="32" placeholder="Create a username" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brandYellow"></div>
+                    <div><label for="customerPassword" class="block text-xs font-semibold text-zinc-300 mb-1.5">Create Password</label><input id="customerPassword" type="password" autocomplete="new-password" required minlength="6" placeholder="At least 6 characters" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brandYellow"></div>
+                    <div><label for="customerPasswordConfirm" class="block text-xs font-semibold text-zinc-300 mb-1.5">Confirm Password</label><input id="customerPasswordConfirm" type="password" autocomplete="new-password" required minlength="6" placeholder="Enter password again" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brandYellow"></div>
+                    <div id="customerRegistrationError" class="hidden text-sm text-rose-400" role="alert"></div>
+                    <div class="flex gap-3"><button type="button" onclick="backToCustomerPersonalInfo()" class="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl text-sm">Back</button><button type="submit" class="flex-1 bg-brandYellow hover:bg-amber-400 text-black font-extrabold py-3 rounded-xl text-sm">Register</button></div>
+                </form>
+            </div>
+            <div id="customerRegistrationPending" class="hidden text-center space-y-4">
+                <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-400"><i class="fa-solid fa-hourglass-half text-3xl"></i></div>
+                <h3 class="text-xl font-black text-white">Thank You for Registering!</h3>
+                <p class="text-sm text-zinc-300">Your registration has been submitted. Please wait for developer approval before entering the order menu.</p>
+                <p class="text-xs text-zinc-500">Your account status is: <span class="text-amber-300 font-bold">PENDING APPROVAL</span></p>
+            </div>
+            <p class="text-[10px] text-zinc-500 text-center mt-6">Standalone preview: registration is saved in this browser. Real developer approval across devices requires a secure backend.</p>
+            <div id="developerApprovalPanel" class="hidden mt-5 border border-zinc-700 rounded-xl p-4 space-y-4 text-left">
+                <div class="flex items-center justify-between gap-2"><h3 class="font-extrabold text-white">Developer Approval</h3><button type="button" onclick="closeDeveloperApproval()" class="text-zinc-400 hover:text-white" aria-label="Close developer panel"><i class="fa-solid fa-xmark"></i></button></div>
+                <form id="developerLoginForm" class="space-y-3" onsubmit="loginDeveloper(event)">
+                    <p class="text-xs text-zinc-400">Sign in to review registered customer accounts.</p>
+                    <div><label for="developerUsername" class="block text-xs text-zinc-300 mb-1">Username</label><input id="developerUsername" type="text" autocomplete="username" required class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white" placeholder="Developer username"></div>
+                    <div><label for="developerPassword" class="block text-xs text-zinc-300 mb-1">Password</label><input id="developerPassword" type="password" autocomplete="current-password" required class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white" placeholder="Developer password"></div>
+                    <div id="developerLoginError" class="hidden text-sm text-rose-400" role="alert"></div>
+                    <button type="submit" class="w-full bg-brandYellow text-black font-extrabold py-2.5 rounded-lg text-sm">Sign In</button>
+                </form>
+                <div id="developerApprovalContent" class="hidden space-y-3">
+                    <div class="flex items-center justify-between"><p class="text-sm font-bold text-white">Registered Account</p><button type="button" onclick="developerLogout()" class="text-xs text-zinc-400 underline">Log out</button></div>
+                    <div id="developerRegisteredUser" class="rounded-lg bg-zinc-900 border border-zinc-700 p-3 text-sm text-zinc-200">No registration found.</div>
+                    <div id="developerApprovalActions" class="hidden grid grid-cols-2 gap-2">
+                        <button type="button" onclick="setCustomerApproval('approved')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-lg text-sm"><i class="fa-solid fa-check mr-1"></i> Approve</button>
+                        <button type="button" onclick="setCustomerApproval('rejected')" class="bg-rose-700 hover:bg-rose-600 text-white font-bold py-2.5 rounded-lg text-sm"><i class="fa-solid fa-xmark mr-1"></i> Reject</button>
+                    </div>
+                    <p id="developerApprovalNotice" class="text-xs text-zinc-400"></p>
+                </div>
+                <p class="text-[10px] text-amber-300/80">Prototype only: credentials are checked in this HTML file and are not secure for a public website.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- HEADER / NAVIGATION BAR -->
+    <header class="bg-black border-b border-zinc-800 sticky top-0 z-40 px-4 py-3 shadow-md">
+        <div class="max-w-7xl mx-auto flex items-center justify-between gap-2">
+            <!-- Left: Kiosk Info -->
+            <div class="flex items-center space-x-3">
+                <div class="bg-black border border-brandYellow/40 text-white font-black px-3 py-2 rounded-xl text-lg sm:text-xl tracking-wider shadow-lg flex flex-col items-center cursor-pointer" onclick="switchView('ordering')">
+                    <span class="text-brandYellow">MARV'S FOOD HUB</span>
+                    <span class="text-[7px] sm:text-[8px] text-zinc-500/80 tracking-wide whitespace-nowrap font-normal leading-tight" title="System developer">Developed by Leonard Edil · 2026</span>
+                </div>
+                <span class="hidden lg:inline-block text-xs text-zinc-400 bg-zinc-900 border border-zinc-800 px-2.5 py-1 rounded-full">
+                    <i class="fa-solid fa-clock text-brandYellow mr-1"></i> Open Daily: 7:00 AM - 10:00 PM
+                </span>
+            </div>
+
+            <!-- Upper Right Actions -->
+            <div class="flex items-center space-x-2 sm:space-x-3">
+                <button onclick="openCSModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-2 rounded-xl text-xs sm:text-sm transition shadow-md flex items-center space-x-1.5">
+                    <i class="fa-solid fa-headset"></i>
+                    <span class="hidden sm:inline">Customer Service</span>
+                </button>
+
+                <button onclick="switchView('tracking')" id="navTrackBtn" class="bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-semibold px-3 py-2 rounded-xl text-xs sm:text-sm transition border border-zinc-800 flex items-center space-x-1.5">
+                    <i class="fa-solid fa-magnifying-glass-location text-brandYellow"></i>
+                    <span class="hidden xs:inline">Track Order</span>
+                </button>
+
+                <button onclick="openCustomerDetails()" class="bg-zinc-900 hover:bg-zinc-800 text-white font-bold px-3 py-2 rounded-xl text-xs sm:text-sm transition border border-zinc-800 flex items-center space-x-1.5">
+                    <i class="fa-solid fa-receipt text-brandYellow"></i>
+                    <span>Pad (<span id="headerCartCount">0</span>)</span>
+                </button>
+
+                <!-- Admin entry and in-place Restore Admin control -->
+                <div class="flex flex-col items-center leading-none gap-1">
+                    <button id="headerAdminButton" onclick="openAdminModal()" class="bg-brandYellow hover:bg-amber-400 text-black font-extrabold px-3.5 py-2 rounded-xl text-xs sm:text-sm transition shadow-lg flex items-center space-x-1.5">
+                        <i class="fa-solid fa-lock text-xs"></i>
+                        <span>Admin</span>
+                    </button>
+                    <button id="restoreAdminDashboardButton" type="button" onclick="restoreAdminDashboard()" class="hidden bg-brandYellow hover:bg-amber-400 text-black font-extrabold px-3.5 py-2 rounded-xl text-xs sm:text-sm transition shadow-lg items-center space-x-1.5" title="Restore Admin Dashboard">
+                        <i class="fa-solid fa-user-shield"></i><span>Restore Admin</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- VIEW CONTROLLER: MENU ORDERING VIEW -->
+    <div id="viewOrdering" class="view-panel flex-grow flex flex-col">
+        <!-- HERO BANNER -->
+        <section class="bg-gradient-to-r from-zinc-900 via-zinc-950 to-black py-5 px-4 border-b border-zinc-800 text-center">
+            <div class="max-w-3xl mx-auto flex flex-col items-center justify-center">
+                <h1 class="text-2xl sm:text-3xl font-black text-brandYellow tracking-wide uppercase drop-shadow">Eat • Drink • Enjoy</h1>
+                <p class="text-xs sm:text-sm text-zinc-300 mt-1">All Your Favorites in One Place! Browse our menu below and tap items to order.</p>
+            </div>
+        </section>
+
+        <!-- MAIN MENU AREA -->
+        <main class="flex-grow max-w-7xl w-full mx-auto px-4 py-6 mb-24">
+            <!-- CATEGORY TABS -->
+            <div class="flex items-center space-x-2 overflow-x-auto pb-4 mb-6 scrollbar-none">
+                <button onclick="filterCategory('all')" id="cat-all" class="category-btn whitespace-nowrap bg-brandYellow text-black font-bold px-5 py-2.5 rounded-xl text-sm transition shadow">All Favorites</button>
+                <button onclick="filterCategory('milktea')" id="cat-milktea" class="category-btn whitespace-nowrap bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-medium px-5 py-2.5 rounded-xl text-sm transition border border-zinc-800">KK's Milk Tea</button>
+                <button onclick="filterCategory('burgerfries')" id="cat-burgerfries" class="category-btn whitespace-nowrap bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-medium px-5 py-2.5 rounded-xl text-sm transition border border-zinc-800">Burgers & Fries</button>
+                <button onclick="filterCategory('combomeal')" id="cat-combomeal" class="category-btn whitespace-nowrap bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-medium px-5 py-2.5 rounded-xl text-sm transition border border-zinc-800">Combo Meals</button>
+                <button onclick="filterCategory('pizza')" id="cat-pizza" class="category-btn whitespace-nowrap bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-medium px-5 py-2.5 rounded-xl text-sm transition border border-zinc-800">Golden Pizza</button>
+                <button onclick="filterCategory('bbq')" id="cat-bbq" class="category-btn whitespace-nowrap bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-medium px-5 py-2.5 rounded-xl text-sm transition border border-zinc-800">Marv's BBQ</button>
+            </div>
+
+            <!-- SEARCH BAR -->
+            <div class="mb-8">
+                <div class="relative max-w-md">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-zinc-500">
+                        <i class="fa-solid fa-search"></i>
+                    </span>
+                    <input type="text" id="menuSearch" oninput="searchMenu()" placeholder="Search milk tea, burger, pizza, bbq..." class="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-3 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-brandYellow transition">
+                </div>
+            </div>
+
+            <!-- MENU ITEMS GRID -->
+            <div id="menuGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <!-- Dynamically populated via JavaScript -->
+            </div>
+        </main>
+    </div>
+
+    <!-- VIEW CONTROLLER: TRACKING VIEW -->
+    <div id="viewTracking" class="view-panel hidden flex-grow max-w-4xl w-full mx-auto px-4 py-8">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl mb-6">
+            <button onclick="switchView('ordering')" class="text-xs text-brandYellow hover:underline mb-4 inline-flex items-center space-x-1">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span>Back to Menu</span>
+            </button>
+            <h2 class="text-xl font-black text-white mb-2 flex items-center space-x-2">
+                <i class="fa-solid fa-location-dot text-brandYellow"></i>
+                <span>Track Customer Order Status</span>
+            </h2>
+            <p class="text-xs text-zinc-400 mb-6">Enter your Order ID (e.g., ORD-4821) or Customer Name to look up live preparation status.</p>
+            
+            <div class="flex flex-col sm:flex-row gap-3">
+                <input type="text" id="trackInput" placeholder="Enter Order ID or Customer Name..." class="flex-grow bg-black border border-zinc-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brandYellow">
+                <button onclick="searchOrderStatus()" class="bg-brandYellow hover:bg-amber-400 text-black font-extrabold px-6 py-3 rounded-xl text-sm transition shadow-md">
+                    Track Order
+                </button>
+            </div>
+        </div>
+
+        <div id="trackingResultArea" class="hidden space-y-4">
+            <!-- Populated via JS -->
+        </div>
+    </div>
+
+    <!-- CUSTOMER SERVICE MODAL -->
+    <div id="csModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-brandCard border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative animate-in fade-in zoom-in duration-200">
+            <button onclick="closeCSModal()" class="absolute top-4 right-4 text-zinc-400 hover:text-white bg-zinc-800 w-8 h-8 rounded-full flex items-center justify-center transition">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="text-center mb-6">
+                <h3 class="text-xl font-black text-white">Customer Support</h3>
+                <p class="text-xs text-zinc-400 mt-1">Have a question or need special assistance with your order? Get in touch with us!</p>
+            </div>
+
+            <div class="space-y-4">
+                <!-- Phone Contact -->
+                <a href="tel:+639976130908" class="flex items-center space-x-4 bg-zinc-900 border border-zinc-800 hover:border-emerald-500 p-4 rounded-xl transition group">
+                    <div class="bg-emerald-500/10 text-emerald-400 w-10 h-10 rounded-xl flex items-center justify-center text-lg group-hover:bg-emerald-500 group-hover:text-black transition">
+                        <i class="fa-solid fa-phone"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-zinc-400 font-semibold">Hotline / Mobile Number</p>
+                        <p class="text-sm font-bold text-white group-hover:text-emerald-400 transition">+63 997 613 0908</p>
+                    </div>
+                </a>
+
+                <!-- Facebook Page -->
+                <a href="https://www.facebook.com/share/19H918zQfv/" target="_blank" class="flex items-center space-x-4 bg-zinc-900 border border-zinc-800 hover:border-blue-500 p-4 rounded-xl transition group">
+                    <div class="bg-blue-500/10 text-blue-400 w-10 h-10 rounded-xl flex items-center justify-center text-lg group-hover:bg-blue-500 group-hover:text-white transition">
+                        <i class="fa-brands fa-facebook-f"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-zinc-400 font-semibold">Official Facebook Page</p>
+                        <p class="text-xs font-bold text-white group-hover:text-blue-400 transition">Marv's Corner Catering and Restaurant</p>
+                    </div>
+                </a>
+
+                <!-- Location -->
+                <div class="flex items-center space-x-4 bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
+                    <div class="bg-brandYellow/10 text-brandYellow w-10 h-10 rounded-xl flex items-center justify-center text-lg">
+                        <i class="fa-solid fa-store"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-zinc-400 font-semibold">Store Location</p>
+                        <p class="text-xs text-zinc-200">Pamucutan Zone 1 near Barangay Hall</p>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="closeCSModal()" class="w-full mt-6 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl text-sm transition">
+                Close
+            </button>
+        </div>
+    </div>
+
+    <!-- FLOATING ORDER PAD BOTTOM BAR -->
+    <div class="fixed bottom-0 left-0 right-0 bg-black/95 backdrop-blur border-t border-zinc-800 py-3 px-4 z-30 shadow-2xl">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-brandYellow text-black w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg shadow">
+                    <i class="fa-solid fa-cart-shopping"></i>
+                </div>
+                <div>
+                    <p class="text-xs text-zinc-400">Current Order Pad</p>
+                    <p class="text-sm font-bold text-white"><span id="footerItemCount">0</span> items selected</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="text-right">
+                    <p class="text-xs text-zinc-400">Total Amount</p>
+                    <p class="text-lg font-black text-brandYellow">₱<span id="footerTotalPrice">0</span></p>
+                </div>
+                <button onclick="openCustomerDetails()" class="bg-brandYellow hover:bg-amber-400 text-black font-extrabold px-6 py-3 rounded-xl text-sm transition shadow-lg flex items-center space-x-2">
+                    <span>Open Pad / Checkout</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CUSTOMIZATION / ITEM MODAL -->
+    <div id="itemModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-brandCard border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative animate-in fade-in zoom-in duration-200">
+            <button onclick="closeItemModal()" class="absolute top-4 right-4 text-zinc-400 hover:text-white bg-zinc-800 w-8 h-8 rounded-full flex items-center justify-center transition">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div id="modalContent"></div>
+        </div>
+    </div>
+
+    <!-- CUSTOMER ORDER PAD & CHECKOUT MODAL -->
+    <div id="orderPadModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-brandCard border border-zinc-800 rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden relative">
+            <div class="p-4 border-b border-zinc-800 flex items-center justify-between bg-black/50">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-clipboard-list text-brandYellow"></i>
+                    <h2 class="text-lg font-bold text-white">Customer Order Pad</h2>
+                </div>
+                <button onclick="closeCustomerDetails()" class="text-zinc-400 hover:text-white bg-zinc-800 w-8 h-8 rounded-full flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto space-y-6 flex-grow">
+                <div id="formValidationError" class="hidden bg-rose-500/10 border border-rose-500 text-rose-400 p-3.5 rounded-xl text-xs flex items-center space-x-2 animate-pulse">
+                    <i class="fa-solid fa-circle-exclamation text-base"></i>
+                    <span id="validationErrorText">Please fill in all required fields before proceeding.</span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-zinc-900/60 p-4 rounded-xl border border-zinc-800">
+                    <div>
+                        <label class="block text-xs font-semibold text-zinc-400 mb-1">
+                            Customer Name <span class="text-rose-500">*</span>
+                        </label>
+                        <input type="text" id="custName" placeholder="e.g., Juan Dela Cruz" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brandYellow transition">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-zinc-400 mb-1">
+                            Order Type <span class="text-rose-500">*</span>
+                        </label>
+                        <select id="custOrderType" onchange="toggleOrderTypeFields()" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brandYellow transition">
+                            <option value="Dine-In">Dine-In</option>
+                            <option value="Take-Out">Take-Out</option>
+                            <option value="Pick-Up">Pick-Up</option>
+                            <option value="Delivery">Delivery</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="contactFieldsContainer" class="hidden bg-zinc-900/80 border border-amber-500/30 p-4 rounded-xl space-y-4">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-brandYellow flex items-center space-x-2">
+                        <i class="fa-solid fa-phone"></i>
+                        <span>Contact & Location Information</span>
+                    </h3>
+                    <div>
+                        <label class="block text-xs font-semibold text-zinc-400 mb-1">
+                            Contact Number <span class="text-rose-500">*</span>
+                        </label>
+                        <input type="tel" id="custContact" placeholder="e.g., 09123456789" class="w-full bg-black border border-zinc-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brandYellow transition">
+                    </div>
+                    <div id="addressFieldWrapper" class="hidden">
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="block text-xs font-semibold text-zinc-400">
+                                Delivery Address / Location Pin <span class="text-rose-500">*</span>
+                            </label>
+                            <button type="button" onclick="getCurrentLocationPin()" class="text-xs text-brandYellow hover:underline flex items-center space-x-1">
+                                <i class="fa-solid fa-location-crosshairs"></i>
+                                <span>Get GPS Location</span>
+                            </button>
+                        </div>
+                        <textarea id="custAddress" rows="2" placeholder="Enter street address, landmark, or pinned GPS coordinates..." class="w-full bg-black border border-zinc-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brandYellow transition"></textarea>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 class="text-sm font-bold text-zinc-300 mb-3">Order Items</h3>
+                    <div id="cartItemsList" class="space-y-3 max-h-60 overflow-y-auto pr-1"></div>
+                </div>
+            </div>
+
+            <div class="p-4 border-t border-zinc-800 bg-black/60 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="text-center sm:text-left">
+                    <p class="text-xs text-zinc-400">Total Payable</p>
+                    <p class="text-2xl font-black text-brandYellow">₱<span id="cartModalTotal">0</span></p>
+                </div>
+                <div class="flex items-center space-x-3 w-full sm:w-auto">
+                    <button onclick="clearCart()" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-2.5 rounded-xl text-sm font-semibold transition">Clear Pad</button>
+                    <button onclick="submitOrder()" class="flex-grow sm:flex-grow-0 bg-brandYellow hover:bg-amber-400 text-black font-extrabold px-6 py-2.5 rounded-xl text-sm transition shadow-lg">
+                        <i class="fa-solid fa-check mr-1.5"></i> Confirm & Submit Order
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADMIN LOGIN MODAL -->
+    <div id="adminLoginModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-brandCard border border-zinc-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl relative">
+            <button onclick="closeAdminLogin()" class="absolute top-4 right-4 text-zinc-400 hover:text-white bg-zinc-800 w-8 h-8 rounded-full flex items-center justify-center transition">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="text-center mb-6">
+                <div class="bg-brandYellow/10 text-brandYellow w-12 h-12 rounded-2xl mx-auto flex items-center justify-center text-xl mb-3 border border-brandYellow/20">
+                    <i class="fa-solid fa-shield-halved"></i>
+                </div>
+                <h3 id="adminAuthTitle" class="text-lg font-bold text-white">Set Up Admin Account</h3>
+                <p id="adminAuthDescription" class="text-xs text-zinc-400 mt-1">Create the first admin account before accessing the dashboard. It will be used for future logins on this browser.</p>
+            </div>
+            <form id="adminAuthForm" onsubmit="handleAdminAuth(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-zinc-400 mb-1">Username</label>
+                    <input type="text" id="adminUser" autocomplete="username" placeholder="Choose an admin username" required minlength="3" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brandYellow">
+                </div>
+                <div id="adminRecoveryCodeWrap">
+                    <label class="block text-xs font-semibold text-zinc-400 mb-1">Password Recovery Code</label>
+                    <input type="text" id="adminRecoveryCode" autocomplete="off" placeholder="Create a recovery code" required minlength="4" maxlength="64" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brandYellow">
+                    <p class="text-[10px] text-zinc-500 mt-1">Create a private code you can remember. You will need it to reset your admin password. Keep it secret.</p>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-zinc-400 mb-1">Password</label>
+                    <input type="password" id="adminPass" autocomplete="new-password" placeholder="Create a strong password" required minlength="6" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brandYellow">
+                </div>
+                <div id="adminConfirmWrap">
+                    <label class="block text-xs font-semibold text-zinc-400 mb-1">Confirm Password</label>
+                    <input type="password" id="adminPassConfirm" autocomplete="new-password" placeholder="Enter password again" required minlength="6" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brandYellow">
+                </div>
+                <button id="adminAuthSubmit" type="submit" class="w-full bg-brandYellow hover:bg-amber-400 text-black font-bold py-2.5 rounded-xl text-sm transition shadow-lg">Create Admin Account</button>
+                <button id="adminForgotPassword" type="button" onclick="handleAdminForgotPassword()" class="hidden w-full text-sm text-brandYellow hover:underline py-1">Forgot password?</button>
+                <p class="text-[10px] text-zinc-500 leading-relaxed">This standalone HTML stores the admin account and recovery code in this browser only. Password recovery uses the code you created; no email is sent.</p>
+            </form>
+        </div>
+    </div>
+
+    <!-- ADMIN DASHBOARD MODAL -->
+    <div id="adminDashboardModal" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 hidden flex flex-col">
+        <div class="bg-black border-b border-zinc-800 px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="bg-brandYellow text-black px-3 py-1.5 rounded-lg font-black text-sm">
+                    <i class="fa-solid fa-user-shield mr-1"></i> ADMIN DASHBOARD
+                </div>
+                <div class="flex items-center space-x-3 text-xs text-zinc-300 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-xl">
+                    <span><i class="fa-regular fa-clock text-brandYellow mr-1"></i> <span id="adminLiveClock">--:--:--</span></span>
+                    <span class="text-zinc-600">|</span>
+                    <span><i class="fa-regular fa-calendar text-brandYellow mr-1"></i> <span id="adminLiveDate">--/--/----</span></span>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-3">
+                <button onclick="triggerEndSales()" class="bg-red-600 hover:bg-red-500 text-white font-extrabold px-3.5 py-2 rounded-xl text-xs transition shadow-md flex items-center space-x-1.5">
+                    <i class="fa-solid fa-flag-checkered"></i>
+                    <span>End Sales for Today</span>
+                </button>
+                <button onclick="refreshAdminData()" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3.5 py-2 rounded-xl text-xs font-semibold transition flex items-center space-x-1.5">
+                    <i class="fa-solid fa-rotate"></i>
+                    <span>Refresh Data</span>
+                </button>
+                <button onclick="formatAdminAccount()" class="bg-red-950 hover:bg-red-900 text-red-200 border border-red-700 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5">
+                    <i class="fa-solid fa-user-gear"></i>
+                    <span>Format Account</span>
+                </button>
+                <button onclick="minimizeAdminDashboard()" class="bg-brandYellow hover:bg-amber-400 text-black px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-md">
+                    <i class="fa-solid fa-window-minimize"></i>
+                    <span>Minimize Admin</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex-grow max-w-7xl w-full mx-auto p-6 overflow-y-auto space-y-6">
+            <div id="adminOrdersPanel" class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-2xl">
+                    <p class="text-xs text-zinc-400">Total Filtered Orders</p>
+                    <p class="text-2xl font-black text-white mt-1" id="statOrderCount">0</p>
+                </div>
+                <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-2xl">
+                    <p class="text-xs text-zinc-400">Total Filtered Revenue</p>
+                    <p class="text-2xl font-black text-brandYellow mt-1">₱<span id="statRevenue">0</span></p>
+                </div>
+                <div class="md:col-span-2 bg-zinc-900 border border-zinc-800 p-4 rounded-2xl flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <p class="text-xs text-zinc-400 mb-1 font-semibold">Daily Calendar Session Filter</p>
+                        <div class="flex items-center space-x-2">
+                            <input type="date" id="adminDateFilter" onchange="filterAdminOrders()" class="bg-black border border-zinc-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brandYellow">
+                            <button onclick="setTodayFilter()" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-xl text-xs font-semibold transition">Today</button>
+                            <button onclick="clearDateFilter()" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-xl text-xs font-semibold transition">All Time</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-xl">
+                <div class="p-4 border-b border-zinc-800 flex items-center justify-between">
+                    <h3 class="text-sm font-bold text-white">Live Customer Orders</h3>
+                    <span class="text-xs text-zinc-400">Manage order status & print thermal receipts</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-black/50 text-zinc-400 border-b border-zinc-800 text-xs uppercase tracking-wider">
+                                <th class="p-4">Order ID / Date</th>
+                                <th class="p-4">Customer & Order Type</th>
+                                <th class="p-4">Total</th>
+                                <th class="p-4">Order Request</th>
+                                <th class="p-4">Additional Request</th>
+                                <th class="p-4">Status</th>
+                                <th class="p-4 text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminOrdersTableBody" class="divide-y divide-zinc-800/60"></tbody>
+                    </table>
+                </div>
+            </div>
+            </div>
+        </div>
+        <div class="shrink-0 bg-black border-t border-zinc-800 px-6 py-3 flex justify-end">
+            <button onclick="closeAdminDashboard()" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-5 py-2.5 rounded-xl text-sm font-semibold transition flex items-center space-x-2 border border-zinc-700">
+                <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                <span>Logout</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- FINAL IRREVERSIBLE PAYMENT CONFIRMATION -->
+    <div id="finalPaymentConfirmModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-[70] hidden flex items-center justify-center p-4">
+        <div class="bg-zinc-900 border border-red-500/50 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <div class="flex items-center gap-3 mb-3">
+                <div class="bg-red-500/15 text-red-400 rounded-full p-2"><i class="fas fa-triangle-exclamation"></i></div>
+                <h3 class="text-lg font-bold text-white">Confirm Payment</h3>
+            </div>
+            <p class="text-sm text-zinc-200 mb-4">Are you sure you want to proceed with this payment? <strong class="text-red-400">This action cannot be undone.</strong> Once confirmed, the order will be marked as paid and the receipt will open.</p>
+            <div class="rounded-xl bg-black border border-zinc-700 p-3 mb-5 text-sm">
+                <div class="flex justify-between mb-2"><span class="text-zinc-400">Amount to pay</span><strong id="finalPaymentTotal" class="text-white">₱0.00</strong></div>
+                <div class="flex justify-between mb-2"><span class="text-zinc-400">Cash received</span><strong id="finalPaymentCash" class="text-white">₱0.00</strong></div>
+                <div class="flex justify-between border-t border-zinc-700 pt-2"><span class="text-zinc-400">Change</span><strong id="finalPaymentChange" class="text-brandYellow">₱0.00</strong></div>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="cancelFinalPayment()" class="flex-1 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-2.5 rounded-xl text-sm">Cancel</button>
+                <button onclick="confirmFinalPayment()" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 rounded-xl text-sm">Yes, Proceed Payment</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CASH PAYMENT WINDOW: payment is committed only after Proceed Payment is clicked -->
+    <div id="paymentConfirmModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] hidden flex items-center justify-center p-4">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <h3 class="text-lg font-bold text-white mb-2">Cash Payment & Change</h3>
+            <p id="paymentConfirmMessage" class="text-sm text-zinc-300 mb-4">Enter the money received from the customer.</p>
+            <div class="rounded-xl bg-black border border-zinc-700 p-4 mb-4">
+                <div class="flex justify-between text-sm text-zinc-300 mb-2"><span>Amount to Pay</span><strong id="paymentAmountDue" class="text-white">₱0.00</strong></div>
+                <label for="cashReceivedInput" class="block text-sm font-semibold text-zinc-200 mb-2">Money in Customer's Hand (Cash Received)</label>
+                <input id="cashReceivedInput" type="number" min="0" step="0.01" inputmode="decimal" oninput="updatePaymentChange()" placeholder="Enter amount received" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-lg text-white focus:outline-none focus:border-brandYellow">
+                <div class="flex justify-between items-center mt-4 pt-3 border-t border-zinc-700"><span class="text-sm text-zinc-300">Change</span><strong id="paymentChangeAmount" class="text-xl text-brandYellow">₱0.00</strong></div>
+                <p id="paymentChangeHint" class="text-xs text-zinc-400 mt-2">Enter the amount received to calculate the exact change.</p>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="cancelPaymentProceed()" class="flex-1 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-2.5 rounded-xl text-sm">Cancel</button>
+                <button id="proceedPaymentButton" onclick="proceedPayment()" disabled class="flex-1 bg-brandYellow hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold py-2.5 rounded-xl text-sm">Proceed Payment</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- THERMAL RECEIPT PRINT MODAL -->
+    <div id="receiptModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+            <button onclick="closeReceiptModal()" class="absolute top-4 right-4 text-zinc-400 hover:text-white bg-zinc-800 w-8 h-8 rounded-full flex items-center justify-center transition">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <h3 class="text-sm font-bold text-white mb-2 flex items-center space-x-2">
+                <i class="fa-solid fa-print text-brandYellow"></i>
+                <span>Thermal Receipt Preview (Dual Copy)</span>
+            </h3>
+            
+            <div id="printable-receipt" contenteditable="false" spellcheck="false" class="receipt-readonly space-y-6 max-h-[65vh] overflow-y-auto pr-1">
+                <!-- CUSTOMER COPY RECEIPT -->
+                <div class="bg-white text-black p-5 rounded-xl font-mono text-xs space-y-3 shadow-inner relative">
+                    <!-- PAID Watermark / Label -->
+                    <div id="receiptPaidWatermarkCust" class="hidden text-center text-red-600 font-extrabold text-sm border-2 border-red-600 py-1 my-1 tracking-widest uppercase">
+                        PAID
+                    </div>
+                    <div class="text-center border-b border-dashed border-zinc-400 pb-2">
+                        <h2 class="font-bold text-sm">MARV'S FOOD HUB</h2>
+                        <p class="text-[10px]">Pamucutan Zone 1 near Barangay Hall</p>
+                        <p class="text-[10px] font-bold mt-1 bg-black text-white py-0.5 rounded">*** CUSTOMER COPY ***</p>
+                    </div>
+                    <div id="receiptDetailsCust" class="space-y-1 border-b border-dashed border-zinc-400 pb-3"></div>
+                    <div id="receiptItemsCust" class="space-y-1.5 border-b border-dashed border-zinc-400 pb-3"></div>
+                    <div class="text-right font-bold text-sm pt-1">
+                        TOTAL: ₱<span id="receiptTotalCust">0</span>
+                    </div>
+                    <div id="receiptPaymentCalculationCust" class="text-zinc-700"></div>
+                    <div id="receiptPaymentCalculationCust" class="text-zinc-700"></div>
+                    <div class="text-center text-[10px] text-zinc-600 pt-2">
+                        <p>THANK YOU FOR CHOOSING MARV'S!</p>
+                    </div>
+                </div>
+
+                <div class="page-break"></div>
+
+                <!-- ADMIN COPY RECEIPT -->
+                <div class="bg-amber-50 text-black p-5 rounded-xl font-mono text-xs space-y-3 shadow-inner border border-amber-200 relative">
+                    <!-- PAID Watermark / Label -->
+                    <div id="receiptPaidWatermarkAdmin" class="hidden text-center text-red-600 font-extrabold text-sm border-2 border-red-600 py-1 my-1 tracking-widest uppercase">
+                        PAID
+                    </div>
+                    <div class="text-center border-b border-dashed border-zinc-400 pb-2">
+                        <h2 class="font-bold text-sm">MARV'S FOOD HUB</h2>
+                        <p class="text-[10px]">Pamucutan Zone 1 near Barangay Hall</p>
+                        <p class="text-[10px] font-bold mt-1 bg-red-600 text-white py-0.5 rounded">*** ADMIN / STORE COPY ***</p>
+                    </div>
+                    <div id="receiptDetailsAdmin" class="space-y-1 border-b border-dashed border-zinc-400 pb-3"></div>
+                    <div id="receiptItemsAdmin" class="space-y-1.5 border-b border-dashed border-zinc-400 pb-3"></div>
+                    <div class="text-right font-bold text-sm pt-1">
+                        TOTAL: ₱<span id="receiptTotalAdmin">0</span>
+                    </div>
+                    <div id="receiptPaymentCalculationAdmin" class="text-zinc-700"></div>
+                    <div id="receiptPaymentCalculationAdmin" class="text-zinc-700"></div>
+                    <div class="text-center text-[10px] text-zinc-600 pt-2">
+                        <p>ADMIN STORE RECORD</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 flex space-x-3">
+                <button onclick="printReceiptNow()" class="w-full bg-brandYellow hover:bg-amber-400 text-black font-bold py-2.5 rounded-xl text-sm transition shadow flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-print"></i>
+                    <span>Print Both Copies (Customer & Admin)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DAILY SALES REPORT MODAL -->
+    <div id="dailyReportModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+            <button onclick="closeDailyReportModal()" class="absolute top-4 right-4 text-zinc-400 hover:text-white bg-zinc-800 w-8 h-8 rounded-full flex items-center justify-center transition">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div id="printable-daily-report" class="bg-white text-black p-6 rounded-xl font-mono text-xs space-y-3 shadow-inner my-2 max-h-[60vh] overflow-y-auto">
+                <div class="text-center border-b border-dashed border-zinc-400 pb-3">
+                    <h2 class="font-bold text-sm">MARV'S FOOD HUB</h2>
+                    <p class="text-[10px] font-bold">END OF DAY SALES REPORT</p>
+                    <p class="text-[10px]" id="reportDateText">Date: --/--/----</p>
+                </div>
+                <div id="dailyReportSummary" class="space-y-1 border-b border-dashed border-zinc-400 pb-3"></div>
+                <div id="dailyReportItems" class="space-y-1 border-b border-dashed border-zinc-400 pb-3"></div>
+                <div class="text-right font-bold text-sm pt-1">
+                    NET REVENUE: ₱<span id="reportTotalRevenue">0</span>
+                </div>
+                <div class="text-center text-[10px] text-zinc-600 pt-2">
+                    <p>*** END OF SALES REPORT ***</p>
+                </div>
+            </div>
+            <div class="mt-4 flex space-x-3">
+                <button onclick="printDailyReportNow()" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 rounded-xl text-sm transition shadow flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-print"></i>
+                    <span>Print Daily Report Summary</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="bg-black border-t border-zinc-800 py-6 text-center text-xs text-zinc-500">
+        <p>© 2026 Marv's Food Hub • KK's Milk Tea • Marv's Corner • Golden Pizza • Marv's BBQ[cite: 1]</p>
+    </footer>
+
+    <!-- APPLICATION JAVASCRIPT -->
+    <script>
+        // One-time reset requested: clear existing live customer orders only.
+        // The reset marker prevents future page loads from clearing new orders.
+        (function clearExistingLiveOrdersOnce() {
+            const resetKey = 'marvs_live_orders_reset_20261016_v1';
+            try {
+                if (localStorage.getItem(resetKey) !== 'done') {
+                    localStorage.removeItem('marvs_orders');
+                    localStorage.setItem(resetKey, 'done');
+                }
+            } catch (error) {
+                console.warn('Could not reset live orders in browser storage.', error);
+            }
+        })();
+        const menuData = [
+            // KK's Milk Tea
+            { id: 'mt_1', name: 'Mango Cheesecake Milk Tea', category: 'milktea', hasSizes: true, prices: { '12oz': 59, '16oz': 69, '22oz': 79 }, desc: 'Rich, creamy & refreshing cheesecake blend' },
+            { id: 'mt_2', name: 'Okinawa Milk Tea', category: 'milktea', hasSizes: true, prices: { '12oz': 59, '16oz': 69, '22oz': 79 }, desc: 'Classic roasted brown sugar flavor' },
+            { id: 'mt_3', name: 'Winter Melon Milk Tea', category: 'milktea', hasSizes: true, prices: { '12oz': 59, '16oz': 69, '22oz': 79 }, desc: 'Smooth, refreshing melon favorite' },
+            { id: 'mt_4', name: 'Hazelnut Milk Tea', category: 'milktea', hasSizes: true, prices: { '12oz': 69, '16oz': 79, '22oz': 89 }, desc: 'Nutty, aromatic sweetness' },
+            { id: 'mt_5', name: 'Red Velvet Milk Tea', category: 'milktea', hasSizes: true, prices: { '12oz': 69, '16oz': 79, '22oz': 89 }, desc: 'Cocoa cream cake sensation' },
+            { id: 'mt_6', name: 'Caramelized Sugar Milk Tea', category: 'milktea', hasSizes: true, prices: { '12oz': 69, '16oz': 79, '22oz': 89 }, desc: 'Rich caramelized sweetness' },
+            { id: 'mt_7', name: 'Dalgona Milk Tea', category: 'milktea', hasSizes: true, prices: { '12oz': 59, '16oz': 69, '22oz': 79 }, desc: 'Sweet sponge candy froth topping' },
+            { id: 'mt_8', name: 'Dark Chocolate Milk Tea', category: 'milktea', hasSizes: true, prices: { '12oz': 69, '16oz': 79, '22oz': 89 }, desc: 'Deep rich cacao flavor' },
+            { id: 'mt_9', name: 'Black Forest Milk Tea', category: 'milktea', hasSizes: true, prices: { '12oz': 69, '16oz': 79, '22oz': 89 }, desc: 'Cherry and chocolate blend' },
+            { id: 'mt_10', name: 'Taro Milk Tea', category: 'milktea', hasSizes: true, prices: { '12oz': 59, '16oz': 69, '22oz': 79 }, desc: 'Creamy sweet yam flavor' },
+            { id: 'mt_11', name: 'Cookies & Cream Milk Tea', category: 'milktea', hasSizes: true, prices: { '12oz': 59, '16oz': 69, '22oz': 79 }, desc: 'Crushed cookies with cream' },
+            { id: 'mt_12', name: 'Chocolate Milk Tea', category: 'milktea', hasSizes: true, prices: { '12oz': 59, '16oz': 69, '22oz': 79 }, desc: 'Smooth milk chocolate delight' },
+
+            // French Fries & Burgers
+            { id: 'bf_1', name: 'French Fries (Small)', category: 'burgerfries', hasSizes: false, price: 55, desc: 'Crispy golden fries' },
+            { id: 'bf_2', name: 'French Fries (Medium)', category: 'burgerfries', hasSizes: false, price: 69, desc: 'Medium sharing portion' },
+            { id: 'bf_3', name: 'French Fries (Large)', category: 'burgerfries', hasSizes: false, price: 99, desc: 'Large golden fries basket' },
+            { id: 'bf_4', name: 'Burger (Chicken / Beef)', category: 'burgerfries', hasSizes: false, price: 55, desc: 'Juicy patty with fresh lettuce and bun' },
+
+            // Combos
+            { id: 'cm_1', name: 'Burger w/ Fries Small', category: 'combomeal', hasSizes: false, price: 105, desc: 'Burger paired with crispy small fries' },
+            { id: 'cm_2', name: 'Combo Medium Meal', category: 'combomeal', hasSizes: false, price: 119, desc: 'Satisfying meal combo' },
+            { id: 'cm_3', name: 'Combo Large Meal', category: 'combomeal', hasSizes: false, price: 149, desc: 'Large portion combo meal' },
+            { id: 'cm_4', name: 'Burger, Fries & Milktea', category: 'combomeal', hasSizes: false, price: 179, desc: 'The ultimate trio feast' },
+            { id: 'cm_5', name: 'Milktea & Fries', category: 'combomeal', hasSizes: false, price: 139, desc: 'Refreshing milk tea with crispy fries' },
+
+            // Golden Pizza
+            { id: 'gp_1', name: 'Ham & Cheese Pizza', category: 'pizza', hasSizes: false, price: 130, desc: 'Classic ham and melted mozzarella' },
+            { id: 'gp_2', name: 'Pepperoni Pizza', category: 'pizza', hasSizes: false, price: 140, desc: 'Loaded with savory pepperoni slices' },
+            { id: 'gp_3', name: 'Hawaiian Pizza', category: 'pizza', hasSizes: false, price: 140, desc: 'Sweet pineapple and ham' },
+            { id: 'gp_4', name: 'Beef & Mushroom Pizza', category: 'pizza', hasSizes: false, price: 150, desc: 'Savory beef and fresh mushrooms' },
+            { id: 'gp_5', name: 'Shawarma Pizza', category: 'pizza', hasSizes: false, price: 170, desc: 'Spiced shawarma meat pizza' },
+            { id: 'gp_6', name: 'Premium Pizza', category: 'pizza', hasSizes: false, price: 190, desc: 'Special loaded premium toppings' },
+            { id: 'gp_7', name: 'Combo: 2 Ham & Cheese + 1.5L Coke', category: 'pizza', hasSizes: false, price: 345, desc: 'Great value sharing combo' },
+
+            // Marv's BBQ
+            { id: 'bbq_1', name: "Main Combo: Unlimited Rice + Ice Tea", category: 'bbq', hasSizes: false, price: 130, desc: 'Marv’s BBQ with Calamansi, Toyo, Chicken Oil & Chilli' },
+            { id: 'bbq_2', name: "Juicy Marv's BBQ Petcho", category: 'bbq', hasSizes: false, price: 85, desc: 'Savory grilled breast-rib cut' },
+            { id: 'bbq_3', name: "Juicy Marv's BBQ Leg", category: 'bbq', hasSizes: false, price: 85, desc: 'Juicy grilled chicken leg quarter' }
+        ];
+
+        let cart = [];
+        let currentFilter = 'all';
+
+        window.addEventListener('DOMContentLoaded', () => {
+            renderMenu(menuData);
+            updateCartUI();
+            startLiveClock();
+        });
+
+        function switchView(view) {
+            ['viewOrdering', 'viewTracking'].forEach(id => document.getElementById(id).classList.add('hidden'));
+            const active = view === 'tracking' ? 'viewTracking' : 'viewOrdering';
+            document.getElementById(active).classList.remove('hidden');
+            const base = "bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-semibold px-3 py-2 rounded-xl text-xs sm:text-sm transition border border-zinc-800 flex items-center space-x-1.5";
+            const selected = "bg-brandYellow text-black font-bold px-3 py-2 rounded-xl text-xs sm:text-sm transition shadow flex items-center space-x-1.5";
+            document.getElementById('navTrackBtn').className = view === 'tracking' ? selected : base;
+        }
+
+        function openCSModal() { document.getElementById('csModal').classList.remove('hidden'); }
+        function closeCSModal() { document.getElementById('csModal').classList.add('hidden'); }
+
+        function startLiveClock() {
+            setInterval(() => {
+                const now = new Date();
+                const clockEl = document.getElementById('adminLiveClock');
+                const dateEl = document.getElementById('adminLiveDate');
+                if (clockEl) clockEl.innerText = now.toLocaleTimeString();
+                if (dateEl) dateEl.innerText = now.toLocaleDateString();
+            }, 1000);
+        }
+
+        function renderMenu(items) {
+            const grid = document.getElementById('menuGrid');
+            grid.innerHTML = '';
+            if (items.length === 0) {
+                grid.innerHTML = `<div class="col-span-full py-12 text-center text-zinc-500">No menu items found.</div>`;
+                return;
+            }
+            items.forEach(item => {
+                const card = document.createElement('div');
+                card.className = "bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex flex-col justify-between hover:border-brandYellow transition group shadow-lg";
+                let priceDisplay = item.hasSizes ? `₱${item.prices['12oz']} - ₱${item.prices['22oz']}` : `₱${item.price}`;
+                card.innerHTML = `
+                    <div>
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-zinc-800 text-brandYellow border border-zinc-700">${item.category}</span>
+                            <span class="text-brandYellow font-black text-sm">${priceDisplay}</span>
+                        </div>
+                        <h3 class="font-bold text-white text-base group-hover:text-brandYellow transition">${item.name}</h3>
+                        <p class="text-xs text-zinc-400 mt-1 line-clamp-2">${item.desc}</p>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-zinc-800/80 flex items-center justify-between">
+                        <span class="text-xs text-zinc-500"><i class="fa-solid fa-utensils mr-1"></i> Tap to order</span>
+                        <button onclick="openItemCustomization('${item.id}')" class="bg-brandYellow hover:bg-amber-400 text-black font-bold px-3.5 py-2 rounded-xl text-xs transition shadow flex items-center space-x-1.5">
+                            <i class="fa-solid fa-plus"></i>
+                            <span>Add</span>
+                        </button>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function filterCategory(cat) {
+            currentFilter = cat;
+            document.querySelectorAll('.category-btn').forEach(btn => {
+                btn.className = "category-btn whitespace-nowrap bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-medium px-5 py-2.5 rounded-xl text-sm transition border border-zinc-800";
+            });
+            const activeBtn = document.getElementById(`cat-${cat}`);
+            if (activeBtn) activeBtn.className = "category-btn whitespace-nowrap bg-brandYellow text-black font-bold px-5 py-2.5 rounded-xl text-sm transition shadow";
+            applySearchAndFilter();
+        }
+
+        function searchMenu() { applySearchAndFilter(); }
+
+        function applySearchAndFilter() {
+            const query = document.getElementById('menuSearch').value.toLowerCase();
+            let filtered = menuData.filter(item => {
+                const matchesCat = currentFilter === 'all' || item.category === currentFilter;
+                const matchesQuery = item.name.toLowerCase().includes(query) || item.desc.toLowerCase().includes(query);
+                return matchesCat && matchesQuery;
+            });
+            renderMenu(filtered);
+        }
+
+        let activeModalItem = null;
+        function openItemCustomization(id) {
+            activeModalItem = menuData.find(m => m.id === id);
+            const modal = document.getElementById('itemModal');
+            const content = document.getElementById('modalContent');
+            
+            let sizeHtml = '';
+            if (activeModalItem.hasSizes) {
+                sizeHtml = `
+                    <div class="mb-4">
+                        <label class="block text-xs font-semibold text-zinc-400 mb-2">Select Size</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <label class="border border-zinc-700 rounded-xl p-3 text-center cursor-pointer hover:border-brandYellow transition bg-zinc-900">
+                                <input type="radio" name="itemSize" value="12oz" checked class="accent-brandYellow mb-1">
+                                <div class="text-xs font-bold text-white">12oz</div>
+                                <div class="text-xs text-brandYellow">₱${activeModalItem.prices['12oz']}</div>
+                            </label>
+                            <label class="border border-zinc-700 rounded-xl p-3 text-center cursor-pointer hover:border-brandYellow transition bg-zinc-900">
+                                <input type="radio" name="itemSize" value="16oz" class="accent-brandYellow mb-1">
+                                <div class="text-xs font-bold text-white">16oz</div>
+                                <div class="text-xs text-brandYellow">₱${activeModalItem.prices['16oz']}</div>
+                            </label>
+                            <label class="border border-zinc-700 rounded-xl p-3 text-center cursor-pointer hover:border-brandYellow transition bg-zinc-900">
+                                <input type="radio" name="itemSize" value="22oz" class="accent-brandYellow mb-1">
+                                <div class="text-xs font-bold text-white">22oz</div>
+                                <div class="text-xs text-brandYellow">₱${activeModalItem.prices['22oz']}</div>
+                            </label>
+                        </div>
+                    </div>
+                `;
+            }
+
+            content.innerHTML = `
+                <span class="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-zinc-800 text-brandYellow border border-zinc-700">${activeModalItem.category}</span>
+                <h3 class="text-lg font-bold text-white mt-2">${activeModalItem.name}</h3>
+                <p class="text-xs text-zinc-400 mb-4">${activeModalItem.desc}</p>
+                ${sizeHtml}
+                <div class="mb-4">
+                    <label class="block text-xs font-semibold text-zinc-400 mb-1">Quantity</label>
+                    <div class="flex items-center space-x-3">
+                        <button type="button" onclick="adjustModalQty(-1)" class="w-10 h-10 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-bold text-white flex items-center justify-center">-</button>
+                        <input type="number" id="modalQty" value="1" min="1" max="20" class="w-16 bg-zinc-900 border border-zinc-700 rounded-xl text-center py-2 text-white font-bold text-sm focus:outline-none">
+                        <button type="button" onclick="adjustModalQty(1)" class="w-10 h-10 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-bold text-white flex items-center justify-center">+</button>
+                    </div>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-xs font-semibold text-zinc-400 mb-1">Special Instructions / Notes</label>
+                    <input type="text" id="modalNotes" placeholder="e.g., Less sugar, extra ice, etc." class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brandYellow">
+                </div>
+                <button onclick="confirmAddToCart()" class="w-full bg-brandYellow hover:bg-amber-400 text-black font-bold py-3 rounded-xl text-sm transition shadow-lg">
+                    Add to Order Pad
+                </button>
+            `;
+            modal.classList.remove('hidden');
+        }
+
+        function closeItemModal() {
+            document.getElementById('itemModal').classList.add('hidden');
+            activeModalItem = null;
+        }
+
+        function adjustModalQty(val) {
+            const input = document.getElementById('modalQty');
+            let current = parseInt(input.value) || 1;
+            current += val;
+            if (current < 1) current = 1;
+            input.value = current;
+        }
+
+        function confirmAddToCart() {
+            if (!activeModalItem) return;
+            const qty = parseInt(document.getElementById('modalQty').value) || 1;
+            const notes = document.getElementById('modalNotes').value;
+            
+            let size = null;
+            let price = activeModalItem.price;
+
+            if (activeModalItem.hasSizes) {
+                const selectedSizeEl = document.querySelector('input[name="itemSize"]:checked');
+                size = selectedSizeEl ? selectedSizeEl.value : '16oz';
+                price = activeModalItem.prices[size];
+            }
+
+            cart.push({
+                cartId: Date.now() + Math.random(),
+                id: activeModalItem.id,
+                name: activeModalItem.name,
+                size: size,
+                price: price,
+                qty: qty,
+                notes: notes
+            });
+
+            updateCartUI();
+            closeItemModal();
+        }
+
+        function updateCartUI() {
+            const totalCount = cart.reduce((sum, item) => sum + item.qty, 0);
+            const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+
+            document.getElementById('headerCartCount').innerText = totalCount;
+            document.getElementById('footerItemCount').innerText = totalCount;
+            document.getElementById('footerTotalPrice').innerText = totalPrice;
+            document.getElementById('cartModalTotal').innerText = totalPrice;
+
+            const listEl = document.getElementById('cartItemsList');
+            if (cart.length === 0) {
+                listEl.innerHTML = `<div class="text-center py-8 text-zinc-500 text-xs">Your order pad is currently empty. Tap items from the menu to start ordering.</div>`;
+                return;
+            }
+
+            listEl.innerHTML = '';
+            cart.forEach((item, index) => {
+                const row = document.createElement('div');
+                row.className = "bg-zinc-900 border border-zinc-800 p-3 rounded-xl flex items-center justify-between gap-3";
+                row.innerHTML = `
+                    <div class="flex-grow">
+                        <div class="flex items-center space-x-2">
+                            <span class="font-bold text-sm text-white">${item.name}</span>
+                            ${item.size ? `<span class="text-[10px] bg-brandYellow/10 text-brandYellow border border-brandYellow/20 px-2 py-0.5 rounded-full font-semibold">\${item.size}</span>` : ''}
+                        </div>
+                        ${item.notes ? `<p class="text-[11px] text-zinc-400 mt-0.5"><i class="fa-solid fa-note-sticky mr-1"></i> \${item.notes}</p>` : ''}
+                        <p class="text-xs text-brandYellow font-semibold mt-1">₱${item.price} × ${item.qty} = ₱${item.price * item.qty}</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="updateCartItemQty(${index}, -1)" class="w-7 h-7 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg flex items-center justify-center text-xs">-</button>
+                        <span class="text-xs font-bold w-5 text-center">${item.qty}</span>
+                        <button onclick="updateCartItemQty(${index}, 1)" class="w-7 h-7 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg flex items-center justify-center text-xs">+</button>
+                        <button onclick="removeCartItem(${index})" class="w-7 h-7 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white rounded-lg flex items-center justify-center text-xs ml-2"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                `;
+                listEl.appendChild(row);
+            });
+        }
+
+        function updateCartItemQty(index, val) {
+            cart[index].qty += val;
+            if (cart[index].qty <= 0) cart.splice(index, 1);
+            updateCartUI();
+        }
+
+        function removeCartItem(index) { cart.splice(index, 1); updateCartUI(); }
+        function clearCart() { cart = []; updateCartUI(); }
+        
+        function openCustomerDetails() { 
+            clearFormErrors();
+            document.getElementById('orderPadModal').classList.remove('hidden'); 
+        }
+        function closeCustomerDetails() { 
+            document.getElementById('orderPadModal').classList.add('hidden'); 
+            clearFormErrors();
+        }
+
+        function toggleOrderTypeFields() {
+            const orderType = document.getElementById('custOrderType').value;
+            const container = document.getElementById('contactFieldsContainer');
+            const addressWrapper = document.getElementById('addressFieldWrapper');
+
+            if (orderType === 'Delivery') {
+                container.classList.remove('hidden');
+                addressWrapper.classList.remove('hidden');
+            } else if (orderType === 'Pick-Up') {
+                container.classList.remove('hidden');
+                addressWrapper.classList.add('hidden');
+            } else {
+                container.classList.add('hidden');
+                addressWrapper.classList.add('hidden');
+            }
+        }
+
+        function getCurrentLocationPin() {
+            if (!navigator.geolocation) {
+                alert('Geolocation is not supported by your browser');
+                return;
+            }
+            const addressBox = document.getElementById('custAddress');
+            addressBox.value = 'Fetching GPS coordinates...';
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    addressBox.value = `Pinned GPS Coordinates: Lat ${pos.coords.latitude.toFixed(6)}, Lng ${pos.coords.longitude.toFixed(6)}`;
+                },
+                () => {
+                    alert('Unable to retrieve location. Type address manually.');
+                    addressBox.value = '';
+                }
+            );
+        }
+
+        function clearFormErrors() {
+            const errBox = document.getElementById('formValidationError');
+            if (errBox) errBox.classList.add('hidden');
+            
+            ['custName', 'custContact', 'custAddress'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.classList.remove('border-rose-500');
+                    el.classList.add('border-zinc-700');
+                }
+            });
+        }
+
+        function submitOrder() {
+            clearFormErrors();
+
+            if (cart.length === 0) { 
+                showValidationError('Your order pad is empty! Please add items from the menu.');
+                return; 
+            }
+
+            const custNameInput = document.getElementById('custName');
+            const custName = custNameInput.value.trim();
+            const custOrderType = document.getElementById('custOrderType').value;
+            const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+
+            let contactNumber = '';
+            let deliveryAddress = '';
+
+            if (!custName) {
+                custNameInput.classList.remove('border-zinc-700');
+                custNameInput.classList.add('border-rose-500');
+                custNameInput.focus();
+                showValidationError('Customer Name is required. Please enter a valid name.');
+                return;
+            }
+
+            if (custOrderType === 'Delivery' || custOrderType === 'Pick-Up') {
+                const contactInput = document.getElementById('custContact');
+                contactNumber = contactInput.value.trim();
+                if (!contactNumber) {
+                    contactInput.classList.remove('border-zinc-700');
+                    contactInput.classList.add('border-rose-500');
+                    contactInput.focus();
+                    showValidationError(`Contact number is required for ${custOrderType} orders.`);
+                    return;
+                }
+            }
+
+            if (custOrderType === 'Delivery') {
+                const addressInput = document.getElementById('custAddress');
+                deliveryAddress = addressInput.value.trim();
+                if (!deliveryAddress) {
+                    addressInput.classList.remove('border-zinc-700');
+                    addressInput.classList.add('border-rose-500');
+                    addressInput.focus();
+                    showValidationError('Delivery address or pinned GPS location is required.');
+                    return;
+                }
+            }
+
+            const newOrder = {
+                id: 'ORD-' + Math.floor(1000 + Math.random() * 9000),
+                timestamp: new Date().toISOString(),
+                dateStr: new Date().toLocaleDateString(),
+                timeStr: new Date().toLocaleTimeString(),
+                customerName: custName,
+                orderType: custOrderType,
+                contact: contactNumber,
+                address: deliveryAddress,
+                items: [...cart],
+                total: totalPrice,
+                status: 'Pending',
+                isPaid: false // Track payment/print lock status
+            };
+
+            let orders = JSON.parse(localStorage.getItem('marvs_orders') || '[]');
+            orders.unshift(newOrder);
+            localStorage.setItem('marvs_orders', JSON.stringify(orders));
+
+            alert(`Order submitted successfully!\nOrder ID: ${newOrder.id}\nCustomer: ${custName}\nTotal: ₱${totalPrice}`);
+            
+            cart = [];
+            updateCartUI();
+            document.getElementById('custName').value = '';
+            document.getElementById('custContact').value = '';
+            document.getElementById('custAddress').value = '';
+            document.getElementById('custOrderType').value = 'Dine-In';
+            toggleOrderTypeFields();
+            closeCustomerDetails();
+        }
+
+        function showValidationError(message) {
+            const errBox = document.getElementById('formValidationError');
+            const errText = document.getElementById('validationErrorText');
+            errText.innerText = message;
+            errBox.classList.remove('hidden');
+        }
+
+        function searchOrderStatus() {
+            const query = document.getElementById('trackInput').value.trim().toLowerCase();
+            if (!query) { alert('Please enter an Order ID or Customer Name.'); return; }
+            renderTrackingResults(query);
+        }
+
+        // Tracking reads the same marvs_orders records that the Admin dashboard updates.
+        function renderTrackingResults(query) {
+            const resultArea = document.getElementById('trackingResultArea');
+            if (!resultArea) return;
+            resultArea.innerHTML = '';
+            const orders = JSON.parse(localStorage.getItem('marvs_orders') || '[]');
+            const normalizedQuery = (query || '').trim().toLowerCase();
+            if (!normalizedQuery) return;
+            const matches = orders.filter(o => String(o.id || '').toLowerCase().includes(normalizedQuery) || String(o.customerName || '').toLowerCase().includes(normalizedQuery));
+            resultArea.classList.remove('hidden');
+
+            if (matches.length === 0) {
+                resultArea.innerHTML = `<div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-center text-zinc-400">No matching orders found. Please verify your Order ID.</div>`;
+                return;
+            }
+
+            matches.forEach(order => {
+                const card = document.createElement('div');
+                card.className = "bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-lg space-y-4";
+                const isDelivery = order.orderType === 'Delivery';
+                const stages = isDelivery
+                    ? ['Pending', 'Preparing', 'On Transit', 'Delivered']
+                    : (order.orderType === 'Pick-Up' ? ['Pending', 'Preparing', 'Ready for pickup', 'Complete'] : ['Pending', 'Preparing', 'Completed']);
+                const currentIndex = stages.indexOf(order.status);
+                const isCancelled = order.status === 'Cancel';
+                const progress = stages.map((stage, index) => {
+                    let classes = 'bg-zinc-800 text-zinc-500';
+                    if (!isCancelled && currentIndex >= index) classes = index === currentIndex ? 'bg-brandYellow text-black font-bold' : 'bg-emerald-500 text-black font-bold';
+                    return `<div class="p-2 rounded-xl ${classes}">${index + 1}. ${stage}</div>`;
+                }).join('');
+                const statusClass = isCancelled ? 'text-rose-400' : (currentIndex === stages.length - 1 ? 'text-emerald-400' : 'text-brandYellow');
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-start border-b border-zinc-800 pb-3">
+                        <div>
+                            <span class="text-xs text-brandYellow font-bold">${order.id}</span>
+                            <h3 class="text-base font-bold text-white">${order.customerName}</h3>
+                            <p class="text-xs text-zinc-400">${order.dateStr} at ${order.timeStr} • ${order.orderType}</p>
+                            <p class="text-xs font-bold mt-2 ${statusClass}">Current Status: ${order.status || 'Pending'}${order.isPaid ? ' • PAID' : ''}</p>
+                        </div>
+                        <span class="text-sm font-black text-brandYellow">₱${order.total}</span>
+                    </div>
+                    <div class="grid grid-cols-${stages.length} gap-2 text-center text-xs py-2">${progress}</div>
+                    ${isCancelled ? '<p class="text-sm text-rose-400 font-semibold">This order has been cancelled.</p>' : ''}
+                    <div class="bg-black/50 p-3 rounded-xl border border-zinc-800 text-xs space-y-1">
+                        <p class="font-bold text-zinc-300">Ordered Items:</p>
+                        ${(order.items || []).map(i => `<div class="flex justify-between text-zinc-400"><span>${i.qty}x ${i.name} ${i.size?'('+i.size+')':''}</span><span>₱${i.price * i.qty}</span></div>`).join('')}
+                    </div>
+                `;
+                resultArea.appendChild(card);
+            });
+        }
+
+        // Keep an already-open tracking result fresh when Admin changes an order in this browser/tab.
+        window.addEventListener('storage', (event) => {
+            if (event.key === 'marvs_orders') {
+                const query = document.getElementById('trackInput')?.value.trim().toLowerCase();
+                if (query) renderTrackingResults(query);
+            }
+        });
+
+        const ADMIN_ACCOUNT_KEY = 'marvs_admin_account_v1';
+        // One active Admin session per shared browser storage (cross-tab lock).
+        const ADMIN_SESSION_KEY = 'marvs_admin_active_session_v1';
+        const ADMIN_SESSION_TIMEOUT_MS = 30000;
+        const ADMIN_SESSION_HEARTBEAT_MS = 10000;
+        const ADMIN_TAB_TOKEN = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('tab-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+        let adminSessionHeartbeat = null;
+        let adminSessionWarningShown = false;
+
+        function getActiveAdminSession() {
+            try {
+                const session = JSON.parse(localStorage.getItem(ADMIN_SESSION_KEY) || 'null');
+                if (!session || !session.token || !session.lastSeen || Date.now() - session.lastSeen > ADMIN_SESSION_TIMEOUT_MS) return null;
+                return session;
+            } catch (_) { return null; }
+        }
+        function claimAdminSession() {
+            const active = getActiveAdminSession();
+            if (active && active.token !== ADMIN_TAB_TOKEN) {
+                alert('Another Admin session is already active. Please log out from that session and try again.');
+                return false;
+            }
+            try {
+                localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token: ADMIN_TAB_TOKEN, lastSeen: Date.now() }));
+                const verify = getActiveAdminSession();
+                if (!verify || verify.token !== ADMIN_TAB_TOKEN) {
+                    alert('Another Admin session is already active. Please log out from that session and try again.');
+                    return false;
+                }
+                if (adminSessionHeartbeat) clearInterval(adminSessionHeartbeat);
+                adminSessionHeartbeat = setInterval(() => {
+                    const current = getActiveAdminSession();
+                    if (current && current.token !== ADMIN_TAB_TOKEN) {
+                        clearInterval(adminSessionHeartbeat);
+                        adminSessionHeartbeat = null;
+                        document.getElementById('adminDashboardModal')?.classList.add('hidden');
+                        setAdminHeaderMode(false);
+                        if (!adminSessionWarningShown) {
+                            adminSessionWarningShown = true;
+                            alert('This Admin session was ended because another session became active.');
+                        }
+                        return;
+                    }
+                    localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token: ADMIN_TAB_TOKEN, lastSeen: Date.now() }));
+                }, ADMIN_SESSION_HEARTBEAT_MS);
+                return true;
+            } catch (_) {
+                alert('Could not verify the active Admin session. Please enable browser storage and try again.');
+                return false;
+            }
+        }
+        function releaseAdminSession() {
+            if (adminSessionHeartbeat) { clearInterval(adminSessionHeartbeat); adminSessionHeartbeat = null; }
+            try {
+                const current = JSON.parse(localStorage.getItem(ADMIN_SESSION_KEY) || 'null');
+                if (current && current.token === ADMIN_TAB_TOKEN) localStorage.removeItem(ADMIN_SESSION_KEY);
+            } catch (_) {}
+        }
+        window.addEventListener('storage', (event) => {
+            if (event.key !== ADMIN_SESSION_KEY || !event.newValue) return;
+            try {
+                const session = JSON.parse(event.newValue);
+                if (session && session.token !== ADMIN_TAB_TOKEN && document.getElementById('adminDashboardModal') && !document.getElementById('adminDashboardModal').classList.contains('hidden')) {
+                    if (adminSessionHeartbeat) { clearInterval(adminSessionHeartbeat); adminSessionHeartbeat = null; }
+                    document.getElementById('adminDashboardModal').classList.add('hidden');
+                    setAdminHeaderMode(false);
+                    if (!adminSessionWarningShown) { adminSessionWarningShown = true; alert('This Admin session was ended because another session became active.'); }
+                }
+            } catch (_) {}
+        });
+        window.addEventListener('beforeunload', releaseAdminSession);
+        function getSavedAdminAccount() {
+            try { return JSON.parse(localStorage.getItem(ADMIN_ACCOUNT_KEY) || 'null'); }
+            catch (_) { return null; }
+        }
+        function renderAdminAuthMode() {
+            const accountExists = !!getSavedAdminAccount();
+            document.getElementById('adminAuthTitle').textContent = accountExists ? 'Admin Authentication' : 'Set Up Admin Account';
+            document.getElementById('adminAuthDescription').textContent = accountExists
+                ? 'Log in with the admin account created for this browser.'
+                : 'Create the first admin account before accessing the dashboard. It will be used for future logins on this browser.';
+            document.getElementById('adminConfirmWrap').classList.toggle('hidden', accountExists);
+            document.getElementById('adminPassConfirm').required = !accountExists;
+            document.getElementById('adminRecoveryCodeWrap').classList.toggle('hidden', accountExists);
+            document.getElementById('adminRecoveryCode').required = !accountExists;
+            document.getElementById('adminForgotPassword').classList.toggle('hidden', !accountExists);
+            document.getElementById('adminPass').autocomplete = accountExists ? 'current-password' : 'new-password';
+            document.getElementById('adminPass').placeholder = accountExists ? 'Enter your password' : 'Create a strong password';
+            document.getElementById('adminUser').placeholder = accountExists ? 'Admin username' : 'Choose an admin username';
+            document.getElementById('adminAuthSubmit').textContent = accountExists ? 'Login to Portal' : 'Create Admin Account';
+            document.getElementById('adminUser').value = '';
+            document.getElementById('adminRecoveryCode').value = '';
+            document.getElementById('adminPass').value = '';
+            document.getElementById('adminPassConfirm').value = '';
+        }
+        function openAdminModal() {
+            renderAdminAuthMode();
+            document.getElementById('adminLoginModal').classList.remove('hidden');
+        }
+        function closeAdminLogin() { document.getElementById('adminLoginModal').classList.add('hidden'); }
+
+        function handleAdminAuth(e) {
+            e.preventDefault();
+            const u = document.getElementById('adminUser').value.trim();
+            const p = document.getElementById('adminPass').value;
+            const savedAccount = getSavedAdminAccount();
+            if (!savedAccount) {
+                const confirmPassword = document.getElementById('adminPassConfirm').value;
+                const recoveryCode = document.getElementById('adminRecoveryCode').value.trim();
+                if (recoveryCode.length < 4) { alert('Please create a recovery code with at least 4 characters.'); return; }
+                if (u.length < 3) { alert('Username must be at least 3 characters.'); return; }
+                if (p.length < 6) { alert('Password must be at least 6 characters.'); return; }
+                if (p !== confirmPassword) { alert('Passwords do not match. Please try again.'); return; }
+                try {
+                    localStorage.setItem(ADMIN_ACCOUNT_KEY, JSON.stringify({ username: u, recoveryCode, password: p, createdAt: new Date().toISOString() }));
+                } catch (_) {
+                    alert('Could not save the admin account in this browser. Please enable browser storage and try again.');
+                    return;
+                }
+                alert('Admin account created. Use these credentials for future logins on this browser.');
+                renderAdminAuthMode();
+                return;
+            }
+            if (u === savedAccount.username && p === savedAccount.password) {
+                if (!claimAdminSession()) return;
+                adminSessionWarningShown = false;
+                closeAdminLogin();
+                document.getElementById('adminUser').value = '';
+                document.getElementById('adminPass').value = '';
+                openAdminDashboard();
+            } else {
+                alert('Invalid admin username or password.');
+            }
+        }
+        function handleAdminForgotPassword() {
+            const savedAccount = getSavedAdminAccount();
+            if (!savedAccount || !savedAccount.recoveryCode) {
+                alert('This admin account has no recovery code. Click Format Account, then register a new admin account with a recovery code.');
+                return;
+            }
+            const enteredCode = prompt('Enter the password recovery code you created during admin registration:');
+            if (enteredCode === null) return;
+            if (enteredCode.trim() !== savedAccount.recoveryCode) {
+                alert('That recovery code does not match.');
+                return;
+            }
+            const newPassword = prompt('Recovery code verified. Enter a new password (at least 6 characters):');
+            if (newPassword === null) return;
+            if (newPassword.length < 6) {
+                alert('Password must be at least 6 characters. No changes were made.');
+                return;
+            }
+            const confirmNewPassword = prompt('Confirm your new password:');
+            if (confirmNewPassword === null) return;
+            if (newPassword !== confirmNewPassword) {
+                alert('Passwords do not match. No changes were made.');
+                return;
+            }
+            try {
+                savedAccount.password = newPassword;
+                savedAccount.passwordUpdatedAt = new Date().toISOString();
+                localStorage.setItem(ADMIN_ACCOUNT_KEY, JSON.stringify(savedAccount));
+                alert('Admin password updated in this browser. You can now log in with the new password.');
+                renderAdminAuthMode();
+            } catch (_) {
+                alert('Could not update the password in this browser. Please check browser storage and try again.');
+            }
+        }
+
+        // Initialize the correct first-run setup/login mode when the page loads.
+        document.addEventListener('DOMContentLoaded', renderAdminAuthMode);
+
+        // Local calendar date helper (avoids UTC date shifts in the Philippines and other time zones).
+        function localCalendarDateKey(value = new Date()) {
+            const d = value instanceof Date ? value : new Date(value);
+            if (Number.isNaN(d.getTime())) return '';
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function openAdminDashboard() {
+            document.getElementById('adminDashboardModal').classList.remove('hidden');
+            document.getElementById('restoreAdminDashboardButton').classList.add('hidden');
+            document.getElementById('restoreAdminDashboardButton').classList.remove('flex');
+            document.getElementById('adminDateFilter').value = localCalendarDateKey();
+            loadAdminOrders();
+        }
+
+        function setAdminHeaderMode(isMinimized) {
+            const adminButton = document.getElementById('headerAdminButton');
+            const restoreButton = document.getElementById('restoreAdminDashboardButton');
+            if (adminButton) adminButton.classList.toggle('hidden', isMinimized);
+            if (restoreButton) {
+                restoreButton.classList.toggle('hidden', !isMinimized);
+                restoreButton.classList.toggle('flex', isMinimized);
+            }
+        }
+
+        function minimizeAdminDashboard() {
+            // Keep the restore control in the exact spot occupied by the Admin button.
+            document.getElementById('adminDashboardModal').classList.add('hidden');
+            setAdminHeaderMode(true);
+        }
+
+        function restoreAdminDashboard() {
+            document.getElementById('adminDashboardModal').classList.remove('hidden');
+            setAdminHeaderMode(false);
+            loadAdminOrders();
+        }
+
+        function closeAdminDashboard() {
+            // Logging out closes the dashboard and releases the single-active-session lock.
+            document.getElementById('adminDashboardModal').classList.add('hidden');
+            setAdminHeaderMode(false);
+            releaseAdminSession();
+        }
+
+        function formatAdminAccount() {
+            const confirmed = confirm('Are you sure you want to format the admin account? This will delete the current saved admin login and require you to register a new default admin account before accessing the dashboard again. Order records will not be deleted.');
+            if (!confirmed) return;
+            try {
+                localStorage.removeItem(ADMIN_ACCOUNT_KEY);
+                closeAdminDashboard();
+                alert('The saved admin account has been deleted. Please register a new default admin account to continue. Your orders have been kept.');
+                openAdminModal();
+            } catch (_) {
+                alert('Could not reset the admin account in this browser. Please check browser storage and try again.');
+            }
+        }
+        function refreshAdminData() { loadAdminOrders(); alert('Admin data refreshed.'); }
+
+        function loadAdminOrders() {
+            const orders = JSON.parse(localStorage.getItem('marvs_orders') || '[]');
+            const dateFilter = document.getElementById('adminDateFilter').value;
+            let filtered = dateFilter ? orders.filter(o => localCalendarDateKey(o.timestamp) === dateFilter) : orders;
+
+            const tbody = document.getElementById('adminOrdersTableBody');
+            tbody.innerHTML = '';
+            let totalRev = 0;
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-zinc-500">No orders found for this session date.</td></tr>`;
+                document.getElementById('statOrderCount').innerText = 0;
+                document.getElementById('statRevenue').innerText = 0;
+                return;
+            }
+
+            filtered.forEach((order) => {
+                if (order.status !== 'Cancel') totalRev += order.total;
+
+                let typeHtml = `<p class="text-xs text-brandYellow font-bold"><i class="fa-solid fa-bag-shopping mr-1"></i> ${order.orderType}</p>`;
+                if (order.orderType === 'Delivery') {
+                    typeHtml = `
+                        <p class="text-xs text-brandYellow font-bold"><i class="fa-solid fa-motorcycle mr-1"></i> Delivery</p>
+                        <p class="text-[11px] text-zinc-300"><i class="fa-solid fa-phone mr-1"></i> ${order.contact}</p>
+                        <p class="text-[10px] text-zinc-400 truncate max-w-xs"><i class="fa-solid fa-location-dot mr-1"></i> ${order.address}</p>
+                    `;
+                } else if (order.orderType === 'Pick-Up') {
+                    typeHtml = `
+                        <p class="text-xs text-brandYellow font-bold"><i class="fa-solid fa-bag-shopping mr-1"></i> Pick-Up</p>
+                        <p class="text-[11px] text-zinc-300"><i class="fa-solid fa-phone mr-1"></i> ${order.contact}</p>
+                    `;
+                }
+
+                let statusBadge = `<span class="bg-amber-500/10 text-brandYellow border border-brandYellow/30 px-2.5 py-1 rounded-full text-xs font-semibold">${order.status}</span>`;
+                if (order.status === 'Preparing') statusBadge = `<span class="bg-blue-500/10 text-blue-400 border border-blue-500/30 px-2.5 py-1 rounded-full text-xs font-semibold">Preparing</span>`;
+                if (['Completed', 'Complete', 'Delivered'].includes(order.status)) statusBadge = `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-full text-xs font-semibold">${order.status}</span>`;
+                if (order.status === 'On Transit') statusBadge = `<span class="bg-sky-500/10 text-sky-400 border border-sky-500/30 px-2.5 py-1 rounded-full text-xs font-semibold">On Transit</span>`;
+                if (order.status === 'Ready for pickup') statusBadge = `<span class="bg-blue-500/10 text-blue-400 border border-blue-500/30 px-2.5 py-1 rounded-full text-xs font-semibold">Ready for pickup</span>`;
+                if (order.status === 'Cancel') statusBadge = `<span class="bg-rose-500/10 text-rose-400 border border-rose-500/30 px-2.5 py-1 rounded-full text-xs font-semibold">Cancel</span>`;
+
+                // Receipt eligibility is checked only when the receipt button is clicked.
+                const rowTransparency = order.isPaid ? 'opacity-80' : '';
+                // Once payment is completed, lock order editing but keep receipt printing available.
+                const statusDisabled = order.isPaid ? 'disabled title="Paid orders are locked and cannot be edited"' : '';
+                let statusOptionsHtml = '';
+                if (order.orderType === 'Delivery') {
+                    const deliveryStatuses = ['Pending', 'Preparing', 'On Transit', 'Delivered'];
+                    statusOptionsHtml = deliveryStatuses.map(status => `<option value="${status}" ${order.status === status ? 'selected' : ''}>${status}</option>`).join('');
+                } else if (order.orderType === 'Pick-Up') {
+                    const pickupStatuses = ['Pending', 'Preparing', 'Ready for pickup', 'Complete'];
+                    statusOptionsHtml = pickupStatuses.map(status => `<option value="${status}" ${order.status === status ? 'selected' : ''}>${status}</option>`).join('');
+                } else {
+                    const otherStatuses = ['Pending', 'Preparing', 'Completed', 'Cancel'];
+                    statusOptionsHtml = otherStatuses.map(status => `<option value="${status}" ${order.status === status ? 'selected' : ''}>${status}</option>`).join('');
+                }
+
+                const tr = document.createElement('tr');
+                tr.className = `hover:bg-black/30 transition ${rowTransparency}`;
+                tr.innerHTML = `
+                    <td class="p-4"><p class="font-bold text-white">${order.id}</p><p class="text-xs text-zinc-400">${order.dateStr} ${order.timeStr}</p></td>
+                    <td class="p-4"><p class="font-semibold text-white">${order.customerName}</p>${typeHtml}</td>
+                    <td class="p-4 font-black text-brandYellow">₱${order.total}</td>
+                    <td class="p-4 text-xs text-zinc-300 min-w-[180px] max-w-sm"><div class="space-y-1">${(order.items || []).map(i => `<p>${i.qty}× ${i.name}${i.size ? ' (' + i.size + ')' : ''}</p>`).join('')}</div></td>
+                    <td class="p-4 text-xs text-zinc-300 min-w-[180px] max-w-sm"><div class="space-y-2">${(order.items || []).filter(i => (i.notes || '').trim()).map(i => `<div><p class="text-[11px] font-semibold text-brandYellow">${i.name}${i.size ? ' (' + i.size + ')' : ''}</p><p class="whitespace-normal break-words">${i.notes}</p></div>`).join('') || '<span class="text-zinc-500 italic">None</span>'}</div></td>
+                    <td class="p-4">${statusBadge} ${order.isPaid ? '<span class="ml-1 text-[10px] bg-red-600 text-white px-1.5 py-0.5 rounded font-bold">PAID</span>' : ''}</td>
+                    <td class="p-4 text-center">
+                        <div class="flex items-center justify-center space-x-2">
+                            <select onchange="updateOrderStatus('${order.id}', this.value)" ${statusDisabled} class="bg-black border border-zinc-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed">
+                                ${statusOptionsHtml}
+                            </select>
+                            <button onclick="handlePrintReceiptClick('${order.id}')" class="bg-zinc-800 hover:bg-zinc-700 text-brandYellow p-2 rounded-lg text-xs transition" title="Print Receipt (Dual Copy)">
+                                <i class="fa-solid fa-print"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('statOrderCount').innerText = filtered.length;
+            document.getElementById('statRevenue').innerText = totalRev;
+        }
+
+        function filterAdminOrders() { loadAdminOrders(); }
+        // Keep the daily view live as new orders arrive or order statuses change.
+        setInterval(() => {
+            const dashboard = document.getElementById('adminDashboardModal');
+            if (dashboard && !dashboard.classList.contains('hidden')) loadAdminOrders();
+        }, 5000);
+        function setTodayFilter() { document.getElementById('adminDateFilter').value = localCalendarDateKey(); loadAdminOrders(); }
+        function clearDateFilter() { document.getElementById('adminDateFilter').value = ''; loadAdminOrders(); }
+
+        function updateOrderStatus(orderId, newStatus) {
+            let orders = JSON.parse(localStorage.getItem('marvs_orders') || '[]');
+            const idx = orders.findIndex(o => o.id === orderId);
+            if (idx !== -1) {
+                // Safety guard: paid orders are locked against status edits; reprinting remains allowed.
+                if (orders[idx].isPaid) {
+                    alert('This order is already paid and locked. You can still print its receipt.');
+                    loadAdminOrders();
+                    return;
+                }
+                orders[idx].status = newStatus;
+                localStorage.setItem('marvs_orders', JSON.stringify(orders));
+                loadAdminOrders();
+                // Refresh tracking immediately when Admin and tracking are open in the same page.
+                const trackingQuery = document.getElementById('trackInput')?.value.trim().toLowerCase();
+                if (trackingQuery) renderTrackingResults(trackingQuery);
+            }
+        }
+
+        let activeReceiptOrder = null;
+        let pendingPaymentOrderId = null;
+        let pendingFinalPayment = null;
+
+        function isOrderReadyForPayment(order) {
+            if (!order) return false;
+            if (order.orderType === 'Delivery') return order.status === 'Delivered' || order.status === 'Completed';
+            if (order.orderType === 'Pick-Up') return order.status === 'Complete' || order.status === 'Completed';
+            return order.status === 'Completed';
+        }
+
+        function handlePrintReceiptClick(orderId) {
+            const orders = JSON.parse(localStorage.getItem('marvs_orders') || '[]');
+            const order = orders.find(o => o.id === orderId);
+            if (!order) return;
+
+            // Only the receipt-button click checks completion. Do not mark paid here.
+            if (!isOrderReadyForPayment(order)) {
+                const requiredStatus = order.orderType === 'Delivery' ? 'Delivered' : (order.orderType === 'Pick-Up' ? 'Complete' : 'Completed');
+                alert(`You can proceed to payment and print the receipt only after this order status is changed to ${requiredStatus}.`);
+                return;
+            }
+
+            // Already-paid orders can reprint without another payment confirmation.
+            if (order.isPaid) {
+                previewReceipt(orderId);
+                return;
+            }
+
+            // Open the cash calculator first. Payment/order state changes only after Proceed Payment.
+            pendingPaymentOrderId = orderId;
+            document.getElementById('paymentConfirmMessage').textContent = `Order ${order.id}: enter how much cash the customer hands over. Proceed Payment will record the payment and open the receipt.`;
+            document.getElementById('paymentAmountDue').textContent = `₱${Number(order.total || 0).toFixed(2)}`;
+            document.getElementById('cashReceivedInput').value = '';
+            document.getElementById('paymentChangeAmount').textContent = '₱0.00';
+            document.getElementById('paymentChangeHint').textContent = 'Enter the amount received to calculate the exact change.';
+            document.getElementById('proceedPaymentButton').disabled = true;
+            document.getElementById('paymentConfirmModal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('cashReceivedInput').focus(), 50);
+        }
+
+        function updatePaymentChange() {
+            const received = Number(document.getElementById('cashReceivedInput').value);
+            const orders = JSON.parse(localStorage.getItem('marvs_orders') || '[]');
+            const order = orders.find(o => o.id === pendingPaymentOrderId);
+            const total = Number(order?.total || 0);
+            const valid = document.getElementById('cashReceivedInput').value.trim() !== '' && Number.isFinite(received) && received >= total && received >= 0;
+            const change = valid ? received - total : 0;
+            document.getElementById('paymentChangeAmount').textContent = `₱${change.toFixed(2)}`;
+            document.getElementById('proceedPaymentButton').disabled = !valid;
+            if (!document.getElementById('cashReceivedInput').value.trim()) {
+                document.getElementById('paymentChangeHint').textContent = 'Enter the amount received to calculate the exact change.';
+            } else if (!Number.isFinite(received) || received < 0) {
+                document.getElementById('paymentChangeHint').textContent = 'Please enter a valid cash amount.';
+            } else if (received < total) {
+                document.getElementById('paymentChangeHint').textContent = `Short by ₱${(total - received).toFixed(2)}. The received amount must cover the total.`;
+            } else {
+                document.getElementById('paymentChangeHint').textContent = 'Exact change calculated. Click Proceed Payment to record this payment.';
+            }
+        }
+
+        function cancelPaymentProceed() {
+            document.getElementById('paymentConfirmModal').classList.add('hidden');
+            pendingPaymentOrderId = null;
+            // Intentionally do not change isPaid or open the receipt.
+        }
+
+        function proceedPayment() {
+            if (!pendingPaymentOrderId) return;
+            const orderId = pendingPaymentOrderId;
+            const received = Number(document.getElementById('cashReceivedInput').value);
+            const orders = JSON.parse(localStorage.getItem('marvs_orders') || '[]');
+            const order = orders.find(o => o.id === orderId);
+            if (!order) return;
+            const total = Number(order.total || 0);
+            if (!Number.isFinite(received) || received < total) {
+                alert('The cash received must be equal to or greater than the amount to pay.');
+                updatePaymentChange();
+                return;
+            }
+
+            // Re-check status before asking for the final irreversible confirmation.
+            if (!isOrderReadyForPayment(order)) {
+                document.getElementById('paymentConfirmModal').classList.add('hidden');
+                pendingPaymentOrderId = null;
+                const requiredStatus = order.orderType === 'Delivery' ? 'Delivered' : (order.orderType === 'Pick-Up' ? 'Complete' : 'Completed');
+                alert(`Payment cannot proceed because this order is no longer ${requiredStatus}.`);
+                return;
+            }
+
+            // Keep payment state unchanged until the user confirms in the final warning dialog.
+            pendingFinalPayment = { orderId, received, total };
+            document.getElementById('paymentConfirmModal').classList.add('hidden');
+            document.getElementById('finalPaymentTotal').textContent = `₱${total.toFixed(2)}`;
+            document.getElementById('finalPaymentCash').textContent = `₱${received.toFixed(2)}`;
+            document.getElementById('finalPaymentChange').textContent = `₱${(received - total).toFixed(2)}`;
+            document.getElementById('finalPaymentConfirmModal').classList.remove('hidden');
+        }
+
+        function cancelFinalPayment() {
+            document.getElementById('finalPaymentConfirmModal').classList.add('hidden');
+            pendingFinalPayment = null;
+            pendingPaymentOrderId = null;
+            // No payment is recorded and no receipt is opened if the user cancels.
+        }
+
+        function confirmFinalPayment() {
+            if (!pendingFinalPayment) return;
+            const { orderId, received } = pendingFinalPayment;
+            const orders = JSON.parse(localStorage.getItem('marvs_orders') || '[]');
+            const order = orders.find(o => o.id === orderId);
+            if (!order) {
+                cancelFinalPayment();
+                alert('This order could not be found. No payment was recorded.');
+                return;
+            }
+
+            // Re-check order status at the final confirmation point.
+            if (!isOrderReadyForPayment(order)) {
+                cancelFinalPayment();
+                const requiredStatus = order.orderType === 'Delivery' ? 'Delivered' : (order.orderType === 'Pick-Up' ? 'Complete' : 'Completed');
+                alert(`Payment cannot proceed because this order is no longer ${requiredStatus}.`);
+                return;
+            }
+
+            const total = Number(order.total || 0);
+            if (received < total) {
+                cancelFinalPayment();
+                alert('The cash received must be equal to or greater than the amount to pay.');
+                return;
+            }
+
+            order.paymentMethod = order.paymentMethod || 'Cash';
+            order.amountTendered = received;
+            order.changeDue = Number((received - total).toFixed(2));
+            order.isPaid = true;
+            localStorage.setItem('marvs_orders', JSON.stringify(orders));
+            document.getElementById('finalPaymentConfirmModal').classList.add('hidden');
+            pendingFinalPayment = null;
+            pendingPaymentOrderId = null;
+            loadAdminOrders();
+            previewReceipt(orderId);
+        }
+
+        function previewReceipt(orderId) {
+            const orders = JSON.parse(localStorage.getItem('marvs_orders') || '[]');
+            activeReceiptOrder = orders.find(o => o.id === orderId);
+            if (!activeReceiptOrder) return;
+
+            // Show or hide bold PAID watermark based on order status
+            const watermarkCust = document.getElementById('receiptPaidWatermarkCust');
+            const watermarkAdmin = document.getElementById('receiptPaidWatermarkAdmin');
+            if (activeReceiptOrder.isPaid) {
+                watermarkCust.classList.remove('hidden');
+                watermarkAdmin.classList.remove('hidden');
+            } else {
+                watermarkCust.classList.add('hidden');
+                watermarkAdmin.classList.add('hidden');
+            }
+
+            let extraReceiptInfo = `<div class="flex justify-between"><span>Order Type:</span> <span>${activeReceiptOrder.orderType}</span></div>`;
+            if (activeReceiptOrder.orderType === 'Delivery') {
+                extraReceiptInfo += `<div class="flex justify-between"><span>Contact:</span> <span>${activeReceiptOrder.contact}</span></div><div class="text-[10px] pt-1"><span>Address:</span> <br><span>${activeReceiptOrder.address}</span></div>`;
+            } else if (activeReceiptOrder.orderType === 'Pick-Up') {
+                extraReceiptInfo += `<div class="flex justify-between"><span>Contact:</span> <span>${activeReceiptOrder.contact}</span></div>`;
+            }
+
+            const detailsHtml = `
+                <div class="flex justify-between"><span>Order ID:</span> <span class="font-bold">${activeReceiptOrder.id}</span></div>
+                <div class="flex justify-between"><span>Date:</span> <span>${activeReceiptOrder.dateStr} ${activeReceiptOrder.timeStr}</span></div>
+                <div class="flex justify-between"><span>Customer:</span> <span>${activeReceiptOrder.customerName}</span></div>
+                ${extraReceiptInfo}
+                <div class="flex justify-between pt-1"><span>Status:</span> <span class="font-bold">${activeReceiptOrder.status}</span></div>
+            `;
+
+            document.getElementById('receiptDetailsCust').innerHTML = detailsHtml;
+            document.getElementById('receiptDetailsAdmin').innerHTML = detailsHtml;
+
+            const itemsHtml = activeReceiptOrder.items.map(i => `
+                <div class="flex justify-between text-[11px]">
+                    <span>${i.qty}x ${i.name} ${i.size?'('+i.size+')':''}</span>
+                    <span>₱${i.price * i.qty}</span>
+                </div>
+            `).join('');
+
+            document.getElementById('receiptItemsCust').innerHTML = itemsHtml;
+            document.getElementById('receiptItemsAdmin').innerHTML = itemsHtml;
+
+            document.getElementById('receiptTotalCust').innerText = Number(activeReceiptOrder.total || 0).toFixed(2);
+            document.getElementById('receiptTotalAdmin').innerText = Number(activeReceiptOrder.total || 0).toFixed(2);
+
+            const totalDue = Number(activeReceiptOrder.total || 0);
+            const isPaid = Boolean(activeReceiptOrder.isPaid);
+            const cashReceived = Number(activeReceiptOrder.amountTendered || 0);
+            const changeDue = Number(activeReceiptOrder.changeDue || 0);
+            const paymentCalculationHtml = `
+                <div class="border-t border-dashed border-zinc-400 mt-2 pt-2 text-[11px]">
+                    <div class="flex justify-between"><span>Mode of Payment:</span><span>${activeReceiptOrder.paymentMethod || 'Cash'}</span></div>
+                    <div class="flex justify-between"><span>Amount to Pay:</span><span>₱${totalDue.toFixed(2)}</span></div>
+                    <div class="flex justify-between"><span>Cash Received:</span><span>₱${isPaid ? cashReceived.toFixed(2) : '0.00'}</span></div>
+                    <div class="flex justify-between"><span>Calculation:</span><span>₱${isPaid ? cashReceived.toFixed(2) : '0.00'} − ₱${totalDue.toFixed(2)} = ₱${isPaid ? changeDue.toFixed(2) : '0.00'}</span></div>
+                    <div class="flex justify-between font-bold"><span>Change:</span><span>₱${isPaid ? changeDue.toFixed(2) : '0.00'}</span></div>
+                </div>`;
+            const paymentCust = document.getElementById('receiptPaymentCalculationCust');
+            const paymentAdmin = document.getElementById('receiptPaymentCalculationAdmin');
+            if (paymentCust) paymentCust.innerHTML = paymentCalculationHtml;
+            if (paymentAdmin) paymentAdmin.innerHTML = paymentCalculationHtml;
+
+            document.getElementById('receiptModal').classList.remove('hidden');
+        }
+
+        function closeReceiptModal() { document.getElementById('receiptModal').classList.add('hidden'); activeReceiptOrder = null; }
+        function printReceiptNow() {
+            document.body.classList.add('printing-receipt');
+            const cleanup = () => document.body.classList.remove('printing-receipt');
+            window.addEventListener('afterprint', cleanup, { once: true });
+            window.print();
+            // Fallback for browsers that do not fire afterprint consistently.
+            setTimeout(cleanup, 1500);
+        }
+
+        function triggerEndSales() {
+            const dateFilter = document.getElementById('adminDateFilter').value || localCalendarDateKey();
+            const orders = JSON.parse(localStorage.getItem('marvs_orders') || '[]');
+            const filtered = orders.filter(o => localCalendarDateKey(o.timestamp) === dateFilter);
+
+            let totalOrders = filtered.length;
+            let completedOrders = filtered.filter(o => o.status === 'Completed').length;
+            let pendingOrders = filtered.filter(o => o.status === 'Pending' || o.status === 'Preparing').length;
+            let cancelledOrders = filtered.filter(o => o.status === 'Cancel').length;
+            let netRevenue = filtered.reduce((sum, o) => o.status !== 'Cancel' ? sum + o.total : sum, 0);
+
+            let itemCounts = {};
+            filtered.forEach(o => {
+                if (o.status !== 'Cancel') {
+                    o.items.forEach(i => {
+                        let key = i.name + (i.size ? ` (${i.size})` : '');
+                        itemCounts[key] = (itemCounts[key] || 0) + i.qty;
+                    });
+                }
+            });
+
+            document.getElementById('reportDateText').innerText = `Date: ${dateFilter}`;
+            
+            const summaryEl = document.getElementById('dailyReportSummary');
+            summaryEl.innerHTML = `
+                <div class="flex justify-between"><span>Total Orders:</span> <span class="font-bold">${totalOrders}</span></div>
+                <div class="flex justify-between"><span>Completed:</span> <span>${completedOrders}</span></div>
+                <div class="flex justify-between"><span>Pending/Prep:</span> <span>${pendingOrders}</span></div>
+                <div class="flex justify-between"><span>Cancelled:</span> <span>${cancelledOrders}</span></div>
+            `;
+
+            const itemsReportEl = document.getElementById('dailyReportItems');
+            itemsReportEl.innerHTML = `<div class="font-bold pt-1 pb-1">Itemized Sales Breakdown:</div>`;
+            if (Object.keys(itemCounts).length === 0) {
+                itemsReportEl.innerHTML += `<div class="text-zinc-500">No active sales recorded.</div>`;
+            } else {
+                for (let [itemName, qty] of Object.entries(itemCounts)) {
+                    const div = document.createElement('div');
+                    div.className = "flex justify-between text-[11px]";
+                    div.innerHTML = `<span>${itemName}</span> <span class="font-bold">x${qty}</span>`;
+                    itemsReportEl.appendChild(div);
+                }
+            }
+
+            document.getElementById('reportTotalRevenue').innerText = netRevenue;
+            document.getElementById('dailyReportModal').classList.remove('hidden');
+        }
+
+        function closeDailyReportModal() {
+            document.getElementById('dailyReportModal').classList.add('hidden');
+        }
+
+        function printDailyReportNow() {
+            window.print();
+        }
+    
+
+        // Customer registration gate. A standalone HTML file can save a pending request locally,
+        // but remote developer approval requires a secure server/backend integration.
+        const CUSTOMER_REGISTRATION_KEY = 'marvs_customer_registration_v1';
+        function getCustomerRegistration() {
+            try { return JSON.parse(localStorage.getItem(CUSTOMER_REGISTRATION_KEY) || 'null'); }
+            catch (_) { return null; }
+        }
+        function showCustomerRegistrationGate() {
+            // Customer registration is no longer a first-page gate; open directly to the order menu.
+            const gate = document.getElementById('customerRegistrationGate');
+            if (gate) gate.classList.add('hidden');
+        }
+
+        // Local prototype developer approval. Replace with secure server-side authentication for production.
+        let developerApprovalAuthenticated = false;
+        function openDeveloperApproval() {
+            const panel = document.getElementById('developerApprovalPanel');
+            let modal = document.getElementById('developerApprovalModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'developerApprovalModal';
+                modal.className = 'fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4';
+                modal.addEventListener('click', function (event) { if (event.target === modal) closeDeveloperApproval(); });
+                document.body.appendChild(modal);
+                modal.appendChild(panel);
+                panel.classList.remove('hidden', 'mt-5', 'border', 'border-zinc-700', 'p-4');
+                panel.classList.add('w-full', 'max-w-lg', 'max-h-[90vh]', 'overflow-y-auto', 'bg-brandCard', 'rounded-2xl', 'p-5', 'shadow-2xl');
+            }
+            modal.classList.remove('hidden');
+            panel.classList.remove('hidden');
+            if (!developerApprovalAuthenticated) document.getElementById('developerUsername').focus();
+            else renderDeveloperApproval();
+        }
+        function closeDeveloperApproval() {
+            const modal = document.getElementById('developerApprovalModal');
+            if (modal) modal.classList.add('hidden');
+            document.getElementById('developerApprovalPanel').classList.add('hidden');
+        }
+        function loginDeveloper(event) {
+            event.preventDefault();
+            const username = document.getElementById('developerUsername').value;
+            const password = document.getElementById('developerPassword').value;
+            const error = document.getElementById('developerLoginError');
+            if (username === 'Admin' && password === 'Password') {
+                developerApprovalAuthenticated = true;
+                error.classList.add('hidden');
+                document.getElementById('developerLoginForm').classList.add('hidden');
+                document.getElementById('developerApprovalContent').classList.remove('hidden');
+                renderDeveloperApproval();
+            } else {
+                error.textContent = 'Incorrect developer username or password.';
+                error.classList.remove('hidden');
+            }
+        }
+        function developerLogout() {
+            developerApprovalAuthenticated = false;
+            document.getElementById('developerLoginForm').classList.remove('hidden');
+            document.getElementById('developerApprovalContent').classList.add('hidden');
+            document.getElementById('developerPassword').value = '';
+        }
+        function renderDeveloperApproval() {
+            if (!developerApprovalAuthenticated) return;
+            const record = getCustomerRegistration();
+            const card = document.getElementById('developerRegisteredUser');
+            const actions = document.getElementById('developerApprovalActions');
+            const notice = document.getElementById('developerApprovalNotice');
+            if (!record) {
+                card.textContent = 'No registered customer account found in this browser.';
+                actions.classList.add('hidden');
+                notice.textContent = 'New registrations will appear here when submitted.';
+                return;
+            }
+            card.innerHTML = `<div class="space-y-1"><p><span class="text-zinc-400">Name:</span> ${escapeDeveloperText(record.fullName || '')}</p><p><span class="text-zinc-400">Email:</span> ${escapeDeveloperText(record.email || '')}</p><p><span class="text-zinc-400">Contact:</span> ${escapeDeveloperText(record.contactNumber || '')}</p><p><span class="text-zinc-400">Username:</span> ${escapeDeveloperText(record.username || '')}</p><p><span class="text-zinc-400">Registered:</span> ${escapeDeveloperText(record.submittedAt ? new Date(record.submittedAt).toLocaleString() : '—')}</p><p><span class="text-zinc-400">Status:</span> <strong class="${record.status === 'approved' ? 'text-emerald-300' : record.status === 'rejected' ? 'text-rose-300' : 'text-amber-300'}">${escapeDeveloperText(String(record.status || 'pending').toUpperCase())}</strong></p></div>`;
+            actions.classList.remove('hidden');
+            notice.textContent = record.status === 'approved' ? 'Approved: the customer can access the order menu.' : record.status === 'rejected' ? 'Rejected: the customer remains blocked from the order menu.' : 'Choose Approve or Reject to update this account.';
+        }
+        function escapeDeveloperText(value) {
+            return String(value).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+        }
+        function setCustomerApproval(status) {
+            if (!developerApprovalAuthenticated || !['approved', 'rejected'].includes(status)) return;
+            const record = getCustomerRegistration();
+            if (!record) { renderDeveloperApproval(); return; }
+            record.status = status;
+            record.reviewedAt = new Date().toISOString();
+            try { localStorage.setItem(CUSTOMER_REGISTRATION_KEY, JSON.stringify(record)); }
+            catch (_) { alert('Could not save the approval status in this browser.'); return; }
+            renderDeveloperApproval();
+            showCustomerRegistrationGate();
+            if (status === 'approved') {
+                document.getElementById('customerRegistrationGate').classList.add('hidden');
+                alert('Customer approved. The order menu is now accessible in this browser.');
+            } else {
+                alert('Customer registration rejected. The order menu remains blocked.');
+            }
+        }
+        function goToCustomerCredentials(event) {
+            event.preventDefault();
+            const fullName = document.getElementById('customerFullName').value.trim();
+            const email = document.getElementById('customerEmail').value.trim();
+            const phone = document.getElementById('customerPhone').value.trim();
+            if (!fullName || !email || !phone) return;
+            document.getElementById('customerRegistrationStep1').classList.add('hidden');
+            document.getElementById('customerRegistrationStep2').classList.remove('hidden');
+            document.getElementById('customerUsername').focus();
+        }
+        function backToCustomerPersonalInfo() {
+            document.getElementById('customerRegistrationStep2').classList.add('hidden');
+            document.getElementById('customerRegistrationStep1').classList.remove('hidden');
+        }
+        function submitCustomerRegistration(event) {
+            event.preventDefault();
+            const error = document.getElementById('customerRegistrationError');
+            const username = document.getElementById('customerUsername').value.trim();
+            const password = document.getElementById('customerPassword').value;
+            const confirm = document.getElementById('customerPasswordConfirm').value;
+            error.classList.add('hidden');
+            if (password !== confirm) {
+                error.textContent = 'Passwords do not match. Please try again.';
+                error.classList.remove('hidden');
+                return;
+            }
+            if (password.length < 6) {
+                error.textContent = 'Password must be at least 6 characters long.';
+                error.classList.remove('hidden');
+                return;
+            }
+            const record = {
+                fullName: document.getElementById('customerFullName').value.trim(),
+                email: document.getElementById('customerEmail').value.trim(),
+                contactNumber: document.getElementById('customerPhone').value.trim(),
+                username,
+                // This is only a local prototype; production credentials must be handled server-side.
+                password,
+                status: 'pending',
+                submittedAt: new Date().toISOString()
+            };
+            try { localStorage.setItem(CUSTOMER_REGISTRATION_KEY, JSON.stringify(record)); }
+            catch (_) {
+                error.textContent = 'Could not save your registration in this browser. Please enable browser storage and try again.';
+                error.classList.remove('hidden');
+                return;
+            }
+            document.getElementById('customerRegistrationStep2').classList.add('hidden');
+            document.getElementById('customerRegistrationPending').classList.remove('hidden');
+        }
+        document.addEventListener('DOMContentLoaded', showCustomerRegistrationGate);
+
+        // Automatically convert text entries to uppercase as the user types.
+        // Passwords, email fields, and non-text inputs are intentionally untouched.
+        document.addEventListener('input', function (event) {
+            const field = event.target;
+            // Keep admin registration/login entries exactly as typed.
+            if (field instanceof HTMLElement && (field.closest('#adminLoginModal') || field.closest('#developerApprovalPanel'))) return;
+            if ((field instanceof HTMLInputElement && field.type === 'text') || field instanceof HTMLTextAreaElement) {
+                const start = field.selectionStart;
+                const end = field.selectionEnd;
+                const upper = field.value.toUpperCase();
+                if (field.value !== upper) {
+                    field.value = upper;
+                    if (typeof start === 'number' && typeof end === 'number') field.setSelectionRange(start, end);
+                }
+            }
+        });
+</script>
+</body>
+</html>
